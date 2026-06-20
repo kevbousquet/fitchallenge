@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useStore } from '../../store/useStore';
+import { db } from '../../db/database';
 import { calculerObjectifCalories } from '../../utils/bmr';
 import { TOUS_LES_CHALLENGES } from '../../utils/challenges';
 import { Button } from '../../components/ui/Button';
@@ -44,12 +45,14 @@ export function Onboarding() {
   };
 
   const terminer = async () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const poids = parseFloat(poidsActuel);
     const user: User = {
       prenom,
       sexe,
       age: parseInt(age),
       taille: parseFloat(taille),
-      poidsInitial: parseFloat(poidsActuel),
+      poidsInitial: poids,
       poidsObjectif: parseFloat(poidsObjectif),
       dateCible: dateCible || undefined,
       objectifCalories,
@@ -57,9 +60,15 @@ export function Onboarding() {
       objectifVerres: 8,
       challengesActifs,
       themeSombre: false,
-      createdAt: format(new Date(), 'yyyy-MM-dd'),
+      createdAt: today,
     };
     await sauvegarderUser(user);
+    // Enregistre le poids de départ comme première pesée
+    const idStr = localStorage.getItem('fitchallenge_userId');
+    const userId = idStr ? parseInt(idStr) : null;
+    if (userId) {
+      await db.pesees.add({ userId, date: today, poids, note: 'Poids de départ' });
+    }
     navigate('/');
   };
 
