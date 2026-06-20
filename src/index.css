@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100;
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Évite le dépassement horizontal sur mobile */
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-height: 100svh;
+  }
+}
+
+@layer components {
+  /* Champ de formulaire standard */
+  .input {
+    @apply w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all;
+  }
+
+  /* Libellé de formulaire */
+  .label {
+    @apply block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5;
+  }
+}
+
+@layer utilities {
+  /* Masque la barre de défilement tout en gardant la fonctionnalité */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Zone de sécurité iPhone (notch/home indicator) */
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
