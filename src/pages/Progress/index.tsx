@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import type { Pesee } from '../../types';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
@@ -13,8 +12,8 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { estimerDateObjectif } from '../../utils/bmr';
+import type { Pesee, Mesure } from '../../types';
 
-// Moyenne mobile sur N jours
 function moyenneMobile(donnees: { date: string; poids: number }[], n: number) {
   return donnees.map((d, i) => {
     const debut = Math.max(0, i - n + 1);
@@ -32,13 +31,26 @@ export function Progress() {
     () => userId ? db.pesees.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Pesee[]),
     [userId],
   ) ?? [];
+
+  const mesures = useLiveQuery(
+    () => userId ? db.mesures.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Mesure[]),
+    [userId],
+  ) ?? [];
+
   const [modalPesee, setModalPesee] = useState(false);
   const [nouveauPoids, setNouveauPoids] = useState('');
   const [noteP, setNoteP] = useState('');
   const [modalSuppression, setModalSuppression] = useState<number | null>(null);
 
+  const [modalMesure, setModalMesure] = useState(false);
+  const [tourDeTaille, setTourDeTaille] = useState('');
+  const [hanches, setHanches] = useState('');
+  const [poitrine, setPoitrine] = useState('');
+  const [noteM, setNoteM] = useState('');
+
   const dernierePesee = pesees.length > 0 ? pesees[pesees.length - 1] : null;
   const premierePesee = pesees.length > 0 ? pesees[0] : null;
+  const derniereMesure = mesures.length > 0 ? mesures[mesures.length - 1] : null;
 
   const poidsInitial = user?.poidsInitial ?? (premierePesee?.poids ?? 0);
   const poidsObjectif = user?.poidsObjectif ?? 0;
@@ -46,19 +58,16 @@ export function Progress() {
   const perteTotale = poidsInitial - poidsActuel;
   const resteAPerdre = Math.max(poidsActuel - poidsObjectif, 0);
 
-  // Données pour le graphique avec tendance
   const donneesGraphique = moyenneMobile(
     pesees.map((p) => ({ date: p.date, poids: p.poids })),
     7,
   );
 
-  // Estimation date d'atteinte de l'objectif
   let estimationDate: Date | null = null;
   if (pesees.length >= 2) {
     const jours = pesees.length - 1;
     const deltaPoids = pesees[0].poids - poidsActuel;
-    const deficitParKg = 7700;
-    const deficitJournalier = jours > 0 ? (deltaPoids / jours) * deficitParKg : 0;
+    const deficitJournalier = jours > 0 ? (deltaPoids / jours) * 7700 : 0;
     if (deficitJournalier > 50) {
       estimationDate = estimerDateObjectif(poidsActuel, poidsObjectif, deficitJournalier);
     }
@@ -67,24 +76,30 @@ export function Progress() {
   const ajouterPesee = async () => {
     const poids = parseFloat(nouveauPoids);
     if (isNaN(poids) || !userId) return;
-    await db.pesees.add({
-      userId,
-      date: format(new Date(), 'yyyy-MM-dd'),
-      poids,
-      note: noteP || undefined,
-    });
-    setNouveauPoids('');
-    setNoteP('');
-    setModalPesee(false);
+    await db.pesees.add({ userId, date: format(new Date(), 'yyyy-MM-dd'), poids, note: noteP || undefined });
+    setNouveauPoids(''); setNoteP(''); setModalPesee(false);
   };
 
-  // Formate l'axe X du graphique
+  const ajouterMesure = async () => {
+    if (!userId) return;
+    const m: Mesure = {
+      userId,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      tourDeTaille: tourDeTaille ? parseFloat(tourDeTaille) : undefined,
+      hanches:      hanches      ? parseFloat(hanches)      : undefined,
+      poitrine:     poitrine     ? parseFloat(poitrine)     : undefined,
+      note: noteM || undefined,
+    };
+    if (!m.tourDeTaille && !m.hanches && !m.poitrine) return;
+    await db.mesures.add(m);
+    setTourDeTaille(''); setHanches(''); setPoitrine(''); setNoteM(''); setModalMesure(false);
+  };
+
   const formatDate = (dateStr: string) => {
     try { return format(new Date(dateStr), 'd MMM', { locale: fr }); }
     catch { return dateStr; }
   };
 
-  // Tooltip personnalisé
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
@@ -103,12 +118,13 @@ export function Progress() {
     <Layout
       titre="Progression"
       actions={
-        <Button taille="sm" onClick={() => setModalPesee(true)}>
-          ⚖️ Peser
-        </Button>
+        <div className="flex gap-2">
+          <Button taille="sm" variante="secondary" onClick={() => setModalMesure(true)}>📏</Button>
+          <Button taille="sm" onClick={() => setModalPesee(true)}>⚖️ Peser</Button>
+        </div>
       }
     >
-      {/* Résumé */}
+      {/* Résumé poids */}
       <Card gradient className="text-white">
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
@@ -140,9 +156,76 @@ export function Progress() {
             )}
           </div>
         )}
-
         {resteAPerdre <= 0 && pesees.length > 0 && (
           <p className="mt-4 text-center font-bold text-white text-lg">🏅 Objectif atteint !</p>
+        )}
+      </Card>
+
+      {/* Mesures corporelles */}
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Mesures corporelles</h3>
+          <button
+            onClick={() => setModalMesure(true)}
+            className="text-xs text-green-600 dark:text-green-400 font-semibold"
+          >
+            + Ajouter
+          </button>
+        </div>
+
+        {!derniereMesure ? (
+          <div className="text-center py-4 text-gray-400">
+            <p className="text-2xl mb-1">📏</p>
+            <p className="text-sm">Aucune mesure enregistrée</p>
+            <p className="text-xs mt-1">Tour de taille, hanches, poitrine…</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-400">
+              Dernière mesure : {format(new Date(derniereMesure.date), 'd MMMM yyyy', { locale: fr })}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Tour de taille', valeur: derniereMesure.tourDeTaille, couleur: 'text-blue-600' },
+                { label: 'Hanches',        valeur: derniereMesure.hanches,      couleur: 'text-purple-600' },
+                { label: 'Poitrine',       valeur: derniereMesure.poitrine,     couleur: 'text-pink-600' },
+              ].map((m) => (
+                <div key={m.label} className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-center">
+                  {m.valeur ? (
+                    <>
+                      <p className={`text-xl font-black ${m.couleur}`}>{m.valeur}</p>
+                      <p className="text-gray-400 text-[10px]">cm</p>
+                    </>
+                  ) : (
+                    <p className="text-gray-300 text-xl">–</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">{m.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Évolution si au moins 2 mesures */}
+            {mesures.length >= 2 && (() => {
+              const avant = mesures[mesures.length - 2];
+              const delta = (champ: keyof Mesure) => {
+                const v1 = avant[champ] as number | undefined;
+                const v2 = derniereMesure[champ] as number | undefined;
+                if (!v1 || !v2) return null;
+                const d = v2 - v1;
+                return d !== 0 ? (
+                  <span className={`text-xs font-medium ${d < 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {d > 0 ? '+' : ''}{d.toFixed(1)} cm
+                  </span>
+                ) : null;
+              };
+              return (
+                <div className="flex gap-2 text-xs text-gray-400">
+                  {delta('tourDeTaille') && <span>Tour de taille : {delta('tourDeTaille')}</span>}
+                  {delta('hanches') && <span>Hanches : {delta('hanches')}</span>}
+                </div>
+              );
+            })()}
+          </div>
         )}
       </Card>
 
@@ -159,47 +242,19 @@ export function Progress() {
             <LineChart data={donneesGraphique} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10 }} />
-              <YAxis
-                domain={['auto', 'auto']}
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v) => `${v}kg`}
-              />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}kg`} />
               <Tooltip content={<CustomTooltip />} />
-              {/* Ligne objectif */}
-              <ReferenceLine
-                y={poidsObjectif}
-                stroke="#22c55e"
-                strokeDasharray="6 3"
-                label={{ value: 'Objectif', position: 'right', fontSize: 10, fill: '#22c55e' }}
-              />
-              {/* Poids réel */}
-              <Line
-                type="monotone"
-                dataKey="poids"
-                stroke="#14b8a6"
-                strokeWidth={2.5}
-                dot={{ r: 4, fill: '#14b8a6' }}
-                activeDot={{ r: 6 }}
-                name="poids"
-              />
-              {/* Tendance lissée */}
-              <Line
-                type="monotone"
-                dataKey="tendance"
-                stroke="#22c55e"
-                strokeWidth={1.5}
-                strokeDasharray="4 2"
-                dot={false}
-                name="tendance"
-              />
+              <ReferenceLine y={poidsObjectif} stroke="#22c55e" strokeDasharray="6 3" label={{ value: 'Objectif', position: 'right', fontSize: 10, fill: '#22c55e' }} />
+              <Line type="monotone" dataKey="poids" stroke="#14b8a6" strokeWidth={2.5} dot={{ r: 4, fill: '#14b8a6' }} activeDot={{ r: 6 }} name="poids" />
+              <Line type="monotone" dataKey="tendance" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="tendance" />
             </LineChart>
           </ResponsiveContainer>
         )}
       </Card>
 
-      {/* Historique des pesées */}
+      {/* Historique pesées */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Historique</h3>
+        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Historique pesées</h3>
         {pesees.length === 0 ? (
           <p className="text-sm text-gray-400 italic">Aucune pesée enregistrée</p>
         ) : (
@@ -222,10 +277,7 @@ export function Progress() {
                       </span>
                     )}
                     <span className="text-lg font-black text-gray-900 dark:text-white">{p.poids} kg</span>
-                    <button
-                      onClick={() => setModalSuppression(p.id!)}
-                      className="p-1.5 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                    >
+                    <button onClick={() => setModalSuppression(p.id!)} className="p-1.5 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
                       🗑️
                     </button>
                   </div>
@@ -236,7 +288,7 @@ export function Progress() {
         )}
       </Card>
 
-      {/* Modal ajout pesée */}
+      {/* Modal pesée */}
       <Modal ouvert={modalPesee} onFermer={() => setModalPesee(false)} titre="Nouvelle pesée">
         <div className="space-y-4">
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -244,21 +296,43 @@ export function Progress() {
           </p>
           <div>
             <label className="label">Poids (kg)</label>
-            <input
-              className="input text-3xl font-bold text-center"
-              type="number"
-              step="0.1"
-              placeholder="86.5"
-              value={nouveauPoids}
-              onChange={(e) => setNouveauPoids(e.target.value)}
-              autoFocus
-            />
+            <input className="input text-3xl font-bold text-center" type="number" step="0.1" placeholder="86.5" value={nouveauPoids} onChange={(e) => setNouveauPoids(e.target.value)} autoFocus />
           </div>
           <div>
             <label className="label">Note (optionnelle)</label>
             <input className="input" placeholder="Ex: Après une bonne nuit…" value={noteP} onChange={(e) => setNoteP(e.target.value)} />
           </div>
           <Button pleine taille="lg" onClick={ajouterPesee} disabled={!nouveauPoids}>
+            ✅ Enregistrer
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Modal mesures */}
+      <Modal ouvert={modalMesure} onFermer={() => setModalMesure(false)} titre="Mesures corporelles">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Mesurez-vous le matin, debout, à jeun. Remplissez au moins une valeur.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="label text-blue-600">Tour taille (cm)</label>
+              <input className="input text-center font-bold" type="number" step="0.5" placeholder="80" value={tourDeTaille} onChange={(e) => setTourDeTaille(e.target.value)} />
+            </div>
+            <div>
+              <label className="label text-purple-600">Hanches (cm)</label>
+              <input className="input text-center font-bold" type="number" step="0.5" placeholder="95" value={hanches} onChange={(e) => setHanches(e.target.value)} />
+            </div>
+            <div>
+              <label className="label text-pink-600">Poitrine (cm)</label>
+              <input className="input text-center font-bold" type="number" step="0.5" placeholder="90" value={poitrine} onChange={(e) => setPoitrine(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Note (optionnelle)</label>
+            <input className="input" placeholder="Ex: Après 3 semaines de sport" value={noteM} onChange={(e) => setNoteM(e.target.value)} />
+          </div>
+          <Button pleine taille="lg" onClick={ajouterMesure} disabled={!tourDeTaille && !hanches && !poitrine}>
             ✅ Enregistrer
           </Button>
         </div>

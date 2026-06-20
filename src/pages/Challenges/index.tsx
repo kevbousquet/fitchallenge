@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { db } from '../../db/database';
 import { useStore } from '../../store/useStore';
@@ -12,7 +12,6 @@ import type { BadgeCle, Journee, Pesee, BadgeDebloque, Repas } from '../../types
 
 export function Challenges() {
   const { user } = useStore();
-
   const userId = user?.id ?? 0;
 
   const journees    = useLiveQuery(() => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([] as Journee[]), [userId]) ?? [];
@@ -20,15 +19,14 @@ export function Challenges() {
   const badgesDB    = useLiveQuery(() => userId ? db.badges.where('userId').equals(userId).toArray() : Promise.resolve([] as BadgeDebloque[]), [userId]) ?? [];
   const repasPhotos = useLiveQuery(() => userId ? db.repas.where('userId').equals(userId).filter((r) => !!r.photoBase64).count() : Promise.resolve(0), [userId]) ?? 0;
 
-  // Semaine courante
   const today = new Date();
   const debutSemaine = startOfWeek(today, { weekStartsOn: 1 });
   const finSemaine = endOfWeek(today, { weekStartsOn: 1 });
   const debutSemaineStr = format(debutSemaine, 'yyyy-MM-dd');
+  const finSemaineStr = format(finSemaine, 'yyyy-MM-dd');
 
-  // Hook au niveau composant (pas imbriqué dans JSX)
   const repasSemaine = useLiveQuery(
-    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debutSemaineStr).toArray() : Promise.resolve([] as Repas[]),
+    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debutSemaineStr && r.date <= finSemaineStr).toArray() : Promise.resolve([] as Repas[]),
     [debutSemaineStr, userId],
   ) ?? [];
 
@@ -40,14 +38,13 @@ export function Challenges() {
   const clesDebloquees = new Set<BadgeCle>(badgesDB.map((b) => b.cle as BadgeCle));
   const tousLesBadges = Object.values(BADGES_CONFIG);
 
-  // Déblocage automatique des nouveaux badges (dans un effect, jamais pendant le rendu)
   useEffect(() => {
     if (!journees.length && !pesees.length) return;
     const nouveauxBadges = evaluerBadges(journees, pesees, poidsInitial, poidsObjectif, badgesDB, repasPhotos);
     if (nouveauxBadges.length === 0) return;
     const todayStr = format(today, 'yyyy-MM-dd');
     nouveauxBadges.forEach((cle) => {
-      db.badges.add({ cle, debloqueLeDate: todayStr }).catch(() => {});
+      db.badges.add({ userId, cle, debloqueLeDate: todayStr }).catch(() => {});
     });
   }, [journees, pesees, badgesDB, repasPhotos, poidsInitial, poidsObjectif]);
 
@@ -55,21 +52,35 @@ export function Challenges() {
   const parDate = new Map(journees.map((j) => [j.date, j]));
 
   const totalSport = journees.filter((j) => j.sportFait).length;
-  const journeesSemaine = journees.filter((j) => j.date >= debutSemaineStr);
+  const journeesSemaine = journees.filter((j) => j.date >= debutSemaineStr && j.date <= finSemaineStr);
   const sportSemaine = journeesSemaine.filter((j) => j.sportFait).length;
 
+  // ── Bilan hebdomadaire ──────────────────────────────────────────────────────
+  const joursAvecDonnees = journeesSemaine.length || 1;
   const calMoyenne = repasSemaine.length > 0
-    ? Math.round(repasSemaine.reduce((s, r) => s + r.calories, 0) / Math.max(journeesSemaine.length, 1))
+    ? Math.round(repasSemaine.reduce((s, r) => s + r.calories, 0) / joursAvecDonnees)
     : 0;
 
-  const messages = [
-    streak >= 7 ? '🔥 Série de 7 jours, bravo !' : null,
-    sportSemaine >= 3 ? '💪 Objectif sport atteint !' : null,
-    parfaitesSemaine >= 5 ? '⭐ Semaine exceptionnelle !' : null,
-    calMoyenne > 0 && calMoyenne <= (user?.objectifCalories ?? 9999)
-      ? '🎯 Déficit respecté en moyenne !'
-      : null,
-  ].filter(Boolean) as string[];
+  const peseesSemaine = pesees.filter((p) => p.date >= debutSemaineStr && p.date <= finSemaineStr);
+  const peseesSemainePrecedente = pesees.filter((p) => {
+    const debutPrec = format(subDays(debutSemaine, 7), 'yyyy-MM-dd');
+    return p.date >= debutPrec && p.date < debutSemaineStr;
+  });
+  const poidsDebutSemaine = peseesSemainePrecedente.length > 0
+    ? peseesSemainePrecedente[peseesSemainePrecedente.length - 1].poids
+    : peseesSemaine.length > 0 ? peseesSemaine[0].poids : null;
+  const poidsFinSemaine = peseesSemaine.length > 0 ? peseesSemaine[peseesSemaine.length - 1].poids : null;
+  const deltaPoidsStr = poidsDebutSemaine && poidsFinSemaine
+    ? (() => { const d = poidsFinSemaine - poidsDebutSemaine; return `${d > 0 ? '+' : ''}${d.toFixed(1)} kg`; })()
+    : null;
+  const deltaCouleur = deltaPoidsStr?.startsWith('-') ? 'text-green-600 dark:text-green-400' : deltaPoidsStr?.startsWith('+') ? 'text-red-500' : 'text-gray-500';
+
+  // Taux de réussite des challenges
+  const tauxChallenges = journeesSemaine.length > 0
+    ? Math.round((journeesSemaine.filter((j) => j.parfaite).length / journeesSemaine.length) * 100)
+    : 0;
+
+  const deficitRespect = calMoyenne > 0 && calMoyenne <= (user?.objectifCalories ?? 9999);
 
   return (
     <Layout titre="Challenges & Badges">
@@ -119,13 +130,82 @@ export function Challenges() {
         </div>
       </Card>
 
+      {/* ── Bilan de la semaine ── */}
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">📊 Bilan de la semaine</h3>
+          <span className="text-xs text-gray-400">
+            {format(debutSemaine, 'd MMM', { locale: fr })} – {format(finSemaine, 'd MMM', { locale: fr })}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          {/* Calories moyennes */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
+            <p className="text-xs text-gray-400 mb-1">Calories moy. / jour</p>
+            <p className={`text-2xl font-black ${deficitRespect ? 'text-green-600 dark:text-green-400' : calMoyenne > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+              {calMoyenne || '–'}
+            </p>
+            {calMoyenne > 0 && (
+              <p className="text-xs text-gray-400">
+                obj. {user?.objectifCalories} kcal {deficitRespect ? '✓' : '✗'}
+              </p>
+            )}
+          </div>
+
+          {/* Évolution poids */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
+            <p className="text-xs text-gray-400 mb-1">Évolution du poids</p>
+            <p className={`text-2xl font-black ${deltaPoidsStr ? deltaCouleur : 'text-gray-400'}`}>
+              {deltaPoidsStr ?? '–'}
+            </p>
+            {poidsFinSemaine && <p className="text-xs text-gray-400">{poidsFinSemaine} kg actuellement</p>}
+          </div>
+
+          {/* Séances de sport */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
+            <p className="text-xs text-gray-400 mb-1">Séances de sport</p>
+            <p className={`text-2xl font-black ${sportSemaine >= 3 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+              {sportSemaine}
+            </p>
+            <p className="text-xs text-gray-400">objectif 3 {sportSemaine >= 3 ? '✓' : ''}</p>
+          </div>
+
+          {/* Taux challenges */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3">
+            <p className="text-xs text-gray-400 mb-1">Taux de réussite</p>
+            <p className={`text-2xl font-black ${tauxChallenges >= 70 ? 'text-green-600 dark:text-green-400' : tauxChallenges >= 40 ? 'text-amber-500' : 'text-gray-400'}`}>
+              {journeesSemaine.length ? `${tauxChallenges}%` : '–'}
+            </p>
+            <p className="text-xs text-gray-400">journées parfaites</p>
+          </div>
+        </div>
+
+        {/* Message motivant */}
+        {(() => {
+          const msgs: string[] = [];
+          if (streak >= 7) msgs.push('🔥 Série de 7 jours, continuez !');
+          if (sportSemaine >= 3) msgs.push('💪 Objectif sport atteint !');
+          if (parfaitesSemaine >= 5) msgs.push('⭐ Semaine exceptionnelle !');
+          if (deficitRespect) msgs.push('🎯 Déficit calorique respecté !');
+          if (deltaPoidsStr?.startsWith('-')) msgs.push('⚖️ Bravo, vous avez perdu du poids cette semaine !');
+          return msgs.length > 0 ? (
+            <div className="bg-gradient-to-r from-green-50 to-teal-50 dark:from-green-900/20 dark:to-teal-900/20 rounded-2xl p-3 space-y-1">
+              {msgs.map((m, i) => <p key={i} className="text-sm text-green-700 dark:text-green-300 font-medium">{m}</p>)}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 italic text-center">Continuez vos efforts, vous pouvez le faire ! 💪</p>
+          );
+        })()}
+      </Card>
+
       {/* Stats globales */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: 'Séances de sport', valeur: totalSport, emoji: '🏋️' },
+          { label: 'Séances de sport', valeur: totalSport,                               emoji: '🏋️' },
           { label: 'Jours parfaits',   valeur: journees.filter((j) => j.parfaite).length, emoji: '⭐' },
-          { label: 'Repas analysés',   valeur: repasPhotos, emoji: '📸' },
-          { label: 'Streak actuel',    valeur: streak, emoji: '🔥' },
+          { label: 'Repas analysés',   valeur: repasPhotos,                              emoji: '📸' },
+          { label: 'Streak actuel',    valeur: streak,                                   emoji: '🔥' },
         ].map((s) => (
           <Card key={s.label} className="text-center py-4">
             <p className="text-3xl">{s.emoji}</p>
@@ -158,36 +238,6 @@ export function Challenges() {
               </div>
             );
           })}
-        </div>
-      </Card>
-
-      {/* Récap hebdomadaire */}
-      <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">
-          📊 Récap de la semaine
-        </h3>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2.5">
-              <p className="text-gray-400 text-xs">Cal. moyennes / jour</p>
-              <p className="font-bold text-gray-900 dark:text-white">{calMoyenne || '–'} kcal</p>
-            </div>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2.5">
-              <p className="text-gray-400 text-xs">Séances de sport</p>
-              <p className="font-bold text-gray-900 dark:text-white">{sportSemaine} / 3 obj.</p>
-            </div>
-          </div>
-          {messages.length > 0 ? (
-            <div className="bg-gradient-to-r from-green-50 to-teal-50 dark:from-green-900/20 dark:to-teal-900/20 rounded-xl p-3 space-y-1">
-              {messages.map((m, i) => (
-                <p key={i} className="text-sm text-green-700 dark:text-green-300 font-medium">{m}</p>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 italic">
-              Continuez vos efforts, vous pouvez le faire ! 💪
-            </p>
-          )}
         </div>
       </Card>
     </Layout>

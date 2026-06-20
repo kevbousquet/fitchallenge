@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { User, Repas, Journee, Pesee, BadgeDebloque } from '../types';
+import type { User, Repas, Journee, Pesee, BadgeDebloque, FavoriRepas, Mesure } from '../types';
 
 class FitChallengeDB extends Dexie {
   users!: Table<User>;
@@ -7,6 +7,8 @@ class FitChallengeDB extends Dexie {
   journees!: Table<Journee>;
   pesees!: Table<Pesee>;
   badges!: Table<BadgeDebloque>;
+  favoris!: Table<FavoriRepas>;
+  mesures!: Table<Mesure>;
 
   constructor() {
     super('FitChallengeDB');
@@ -28,11 +30,21 @@ class FitChallengeDB extends Dexie {
       pesees:   '++id, date, userId',
       badges:   '++id, [userId+cle], userId',
     }).upgrade(async (tx) => {
-      // Migration : les données v1 appartiennent au profil 1
       await tx.table('repas').toCollection().modify({ userId: 1 });
       await tx.table('journees').toCollection().modify({ userId: 1 });
       await tx.table('pesees').toCollection().modify({ userId: 1 });
       await tx.table('badges').toCollection().modify({ userId: 1 });
+    });
+
+    // v3 — catégories repas, favoris, mesures corporelles
+    this.version(3).stores({
+      users:    '++id',
+      repas:    '++id, date, userId, categorie',
+      journees: '++id, [userId+date], userId',
+      pesees:   '++id, date, userId',
+      badges:   '++id, [userId+cle], userId',
+      favoris:  '++id, userId',
+      mesures:  '++id, [userId+date], userId',
     });
   }
 }

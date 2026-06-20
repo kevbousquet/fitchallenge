@@ -1,5 +1,7 @@
 // ─── Types principaux de FitChallenge ───────────────────────────────────────
 
+export type CategoriRepas = 'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation';
+
 export interface User {
   id?: number;
   prenom: string;
@@ -15,6 +17,10 @@ export interface User {
   challengesActifs: ChallengeId[];
   themeSombre: boolean;
   createdAt: string;
+  notifRepasActif?: boolean;
+  notifRepasHeure?: string;
+  notifPeseeActif?: boolean;
+  notifPeseeHeure?: string;
 }
 
 export type ChallengeId =
@@ -56,7 +62,29 @@ export interface Repas {
   lipides?: number;
   photoBase64?: string;
   aliments?: AlimentDetail[];
+  categorie?: CategoriRepas;
   createdAt: string;
+}
+
+export interface FavoriRepas {
+  id?: number;
+  userId: number;
+  nom: string;
+  calories: number;
+  proteines?: number;
+  glucides?: number;
+  lipides?: number;
+  categorie?: CategoriRepas;
+}
+
+export interface Mesure {
+  id?: number;
+  userId: number;
+  date: string;
+  tourDeTaille?: number;
+  hanches?: number;
+  poitrine?: number;
+  note?: string;
 }
 
 export interface Journee {

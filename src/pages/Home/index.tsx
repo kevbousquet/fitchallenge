@@ -13,22 +13,36 @@ import { Modal } from '../../components/ui/Modal';
 import { CHALLENGES } from '../../utils/challenges';
 import { calculerStreak } from '../../utils/streak';
 import { analyserRepasParPhoto, fileToBase64 } from '../../services/claudeApi';
-import type { Repas, AnalyseRepas, ChallengeId } from '../../types';
+import type { Repas, AnalyseRepas, ChallengeId, CategoriRepas, FavoriRepas } from '../../types';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
+
+const CATS: { id: CategoriRepas; emoji: string; label: string }[] = [
+  { id: 'petit_dejeuner', emoji: '🌅', label: 'Matin' },
+  { id: 'dejeuner',       emoji: '☀️', label: 'Midi' },
+  { id: 'diner',          emoji: '🌙', label: 'Soir' },
+  { id: 'collation',      emoji: '🍎', label: 'Snack' },
+];
+
+function devinerCategorie(): CategoriRepas {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 10)  return 'petit_dejeuner';
+  if (h >= 11 && h < 15) return 'dejeuner';
+  if (h >= 19 && h < 23) return 'diner';
+  return 'collation';
+}
 
 export function Home() {
   const { user, journeeAujourdhui, mettreAJourJournee } = useStore();
 
   const userId = user?.id ?? 0;
 
-  // Requêtes en temps réel via Dexie, filtrées par utilisateur actif
   const repasAujourdhui = useLiveQuery(
-    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date === TODAY).toArray() : Promise.resolve([]),
+    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date === TODAY).toArray() : Promise.resolve([] as Repas[]),
     [userId],
   ) ?? [];
   const toutesJournees = useLiveQuery(
-    () => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([]),
+    () => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([] as import('../../types').Journee[]),
     [userId],
   ) ?? [];
 
@@ -36,11 +50,8 @@ export function Home() {
   const caloriesConsommees = repasAujourdhui.reduce((s, r) => s + r.calories, 0);
   const objectifCal = user?.objectifCalories ?? 1800;
 
-  // Modal d'ajout de repas
   const [modalRepas, setModalRepas] = useState(false);
   const [modalSport, setModalSport] = useState(false);
-
-  // Modal sport
   const [typeSport, setTypeSport] = useState<'cardio' | 'musculation' | 'marche' | 'autre'>('cardio');
   const [dureeSport, setDureeSport] = useState('30');
 
@@ -54,15 +65,14 @@ export function Home() {
     confetti({ particleCount: 60, spread: 70, origin: { y: 0.7 }, colors: ['#22c55e', '#14b8a6', '#86efac'] });
   };
 
-  // Basculer un challenge simple (check)
   const basculeCheck = async (id: ChallengeId) => {
     if (!journeeAujourdhui) return;
     const map: Record<string, keyof typeof journeeAujourdhui> = {
-      sommeil:          'sommeilOk',
+      sommeil:           'sommeilOk',
       pas_de_grignotage: 'pasDeGrignotage',
-      pas_alcool:       'pasDAlcool',
-      pas_sucre:        'pasDeSucre',
-      legumes:          'legumesMange',
+      pas_alcool:        'pasDAlcool',
+      pas_sucre:         'pasDeSucre',
+      legumes:           'legumesMange',
     };
     const champ = map[id];
     if (!champ) return;
@@ -71,7 +81,6 @@ export function Home() {
     if (!etaitCoche) lancerConfettis();
   };
 
-  // Cocher challenge sport
   const handleSport = () => {
     if (journeeAujourdhui?.sportFait) {
       mettreAJourJournee({ sportFait: false, typeSport: undefined, dureeSport: undefined });
@@ -80,14 +89,12 @@ export function Home() {
     }
   };
 
-  // Verre d'eau
   const ajouterVerre = async () => {
     const v = (journeeAujourdhui?.verresBus ?? 0) + 1;
     await mettreAJourJournee({ verresBus: v });
     if (v >= (user?.objectifVerres ?? 8)) lancerConfettis();
   };
 
-  // Pas
   const [pasInput, setPasInput] = useState('');
   const saisirPas = async () => {
     const n = parseInt(pasInput);
@@ -98,7 +105,6 @@ export function Home() {
     }
   };
 
-  // Rendu d'un challenge selon son type
   const renderChallenge = (id: ChallengeId) => {
     const c = CHALLENGES[id];
     if (!c || !journeeAujourdhui || !user) return null;
@@ -153,7 +159,7 @@ export function Home() {
           <div className="flex items-center gap-2 mt-1">
             <div className="flex gap-1">
               {Array.from({ length: user.objectifVerres }).map((_, i) => (
-                <span key={i} className={`text-base ${i < journeeAujourdhui.verresBus ? '💧' : '⬜'}`}>
+                <span key={i} className="text-base">
                   {i < journeeAujourdhui.verresBus ? '💧' : '○'}
                 </span>
               ))}
@@ -165,21 +171,11 @@ export function Home() {
         );
         break;
 
-      case 'sommeil':
-        estCoche = journeeAujourdhui.sommeilOk;
-        break;
-      case 'pas_de_grignotage':
-        estCoche = journeeAujourdhui.pasDeGrignotage;
-        break;
-      case 'pas_alcool':
-        estCoche = journeeAujourdhui.pasDAlcool;
-        break;
-      case 'pas_sucre':
-        estCoche = journeeAujourdhui.pasDeSucre;
-        break;
-      case 'legumes':
-        estCoche = journeeAujourdhui.legumesMange;
-        break;
+      case 'sommeil':        estCoche = journeeAujourdhui.sommeilOk;        break;
+      case 'pas_de_grignotage': estCoche = journeeAujourdhui.pasDeGrignotage; break;
+      case 'pas_alcool':    estCoche = journeeAujourdhui.pasDAlcool;        break;
+      case 'pas_sucre':     estCoche = journeeAujourdhui.pasDeSucre;        break;
+      case 'legumes':       estCoche = journeeAujourdhui.legumesMange;      break;
     }
 
     const clicable = !['deficit_calorique', 'pas', 'hydratation'].includes(id);
@@ -187,20 +183,10 @@ export function Home() {
     return (
       <div
         key={id}
-        onClick={clicable ? () => {
-          if (id === 'sport') handleSport();
-          else basculeCheck(id);
-        } : undefined}
-        className={`flex items-start gap-3 p-3 rounded-2xl transition-all ${
-          clicable ? 'cursor-pointer active:scale-98' : ''
-        } ${estCoche ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-800/50'}`}
+        onClick={clicable ? () => { if (id === 'sport') handleSport(); else basculeCheck(id); } : undefined}
+        className={`flex items-start gap-3 p-3 rounded-2xl transition-all ${clicable ? 'cursor-pointer active:scale-98' : ''} ${estCoche ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-800/50'}`}
       >
-        {/* Checkbox visuelle */}
-        <div className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-          estCoche
-            ? 'border-green-500 bg-green-500 text-white'
-            : 'border-gray-300 dark:border-gray-600'
-        }`}>
+        <div className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${estCoche ? 'border-green-500 bg-green-500 text-white' : 'border-gray-300 dark:border-gray-600'}`}>
           {estCoche && <span className="text-xs">✓</span>}
         </div>
         <div className="flex-1 min-w-0">
@@ -219,41 +205,30 @@ export function Home() {
   return (
     <Layout
       titre={`Bonjour ${user?.prenom ?? ''} 👋`}
-      actions={
-        streak > 0 ? (
-          <span className="text-lg font-bold text-orange-500">🔥 {streak}</span>
-        ) : null
-      }
+      actions={streak > 0 ? <span className="text-lg font-bold text-orange-500">🔥 {streak}</span> : null}
     >
-      {/* Sous-titre date */}
       <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2 capitalize">
         {format(new Date(), 'EEEE d MMMM', { locale: fr })}
       </p>
 
-      {/* Jauge circulaire des calories */}
       <Card className="flex flex-col items-center py-6">
         <CircularGauge valeur={caloriesConsommees} objectif={objectifCal} />
-        <Button
-          className="mt-5"
-          taille="lg"
-          onClick={() => setModalRepas(true)}
-        >
+        <Button className="mt-5" taille="lg" onClick={() => setModalRepas(true)}>
           + Ajouter un repas
         </Button>
       </Card>
 
-      {/* Macros du jour */}
       {repasAujourdhui.length > 0 && (
         <Card>
           <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Macros du jour</h3>
           <div className="grid grid-cols-3 gap-2 text-center">
             {[
-              { label: 'Protéines', valeur: repasAujourdhui.reduce((s, r) => s + (r.proteines ?? 0), 0), unite: 'g', couleur: 'text-blue-600' },
-              { label: 'Glucides',  valeur: repasAujourdhui.reduce((s, r) => s + (r.glucides ?? 0), 0),  unite: 'g', couleur: 'text-amber-600' },
-              { label: 'Lipides',   valeur: repasAujourdhui.reduce((s, r) => s + (r.lipides ?? 0), 0),   unite: 'g', couleur: 'text-red-500' },
+              { label: 'Protéines', valeur: repasAujourdhui.reduce((s, r) => s + (r.proteines ?? 0), 0), couleur: 'text-blue-600' },
+              { label: 'Glucides',  valeur: repasAujourdhui.reduce((s, r) => s + (r.glucides ?? 0), 0),  couleur: 'text-amber-600' },
+              { label: 'Lipides',   valeur: repasAujourdhui.reduce((s, r) => s + (r.lipides ?? 0), 0),   couleur: 'text-red-500' },
             ].map((m) => (
               <div key={m.label} className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-3">
-                <p className={`text-xl font-bold ${m.couleur}`}>{Math.round(m.valeur)}{m.unite}</p>
+                <p className={`text-xl font-bold ${m.couleur}`}>{Math.round(m.valeur)}g</p>
                 <p className="text-xs text-gray-400">{m.label}</p>
               </div>
             ))}
@@ -261,23 +236,19 @@ export function Home() {
         </Card>
       )}
 
-      {/* Checklist challenges */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">
-          Challenges du jour
-        </h3>
+        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Challenges du jour</h3>
         <div className="space-y-2">
           {user?.challengesActifs.map(renderChallenge)}
         </div>
         {journeeAujourdhui?.parfaite && (
-          <div className="mt-4 p-3 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl text-white text-center animate-bounce-in">
+          <div className="mt-4 p-3 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl text-white text-center">
             <p className="font-bold">🎉 Journée parfaite !</p>
             <p className="text-sm text-green-100">Tous les challenges accomplis !</p>
           </div>
         )}
       </Card>
 
-      {/* Aperçu repas du jour */}
       {repasAujourdhui.length > 0 && (
         <Card>
           <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">
@@ -289,7 +260,9 @@ export function Home() {
                 {r.photoBase64 ? (
                   <img src={`data:image/jpeg;base64,${r.photoBase64}`} className="w-12 h-12 rounded-xl object-cover" alt={r.nom} />
                 ) : (
-                  <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">🍽️</div>
+                  <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">
+                    {CATS.find((c) => c.id === r.categorie)?.emoji ?? '🍽️'}
+                  </div>
                 )}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{r.nom}</p>
@@ -301,10 +274,8 @@ export function Home() {
         </Card>
       )}
 
-      {/* Modal ajout repas */}
       <ModalAjoutRepas ouvert={modalRepas} onFermer={() => setModalRepas(false)} userId={userId} />
 
-      {/* Modal sport */}
       <Modal ouvert={modalSport} onFermer={() => setModalSport(false)} titre="Séance de sport">
         <div className="space-y-4">
           <div>
@@ -327,14 +298,7 @@ export function Home() {
           </div>
           <div>
             <label className="label">Durée (minutes)</label>
-            <input
-              className="input"
-              type="number"
-              min="5"
-              max="300"
-              value={dureeSport}
-              onChange={(e) => setDureeSport(e.target.value)}
-            />
+            <input className="input" type="number" min="5" max="300" value={dureeSport} onChange={(e) => setDureeSport(e.target.value)} />
           </div>
           <Button pleine taille="lg" onClick={validerSport}>✅ Valider la séance</Button>
         </div>
@@ -343,37 +307,38 @@ export function Home() {
   );
 }
 
-// ─── Sous-composant : Modal d'ajout de repas ────────────────────────────────
+// ─── Modal d'ajout de repas ──────────────────────────────────────────────────
 function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFermer: () => void; userId: number }) {
-  const [onglet, setOnglet] = useState<'photo' | 'manuel'>('photo');
+  const [onglet, setOnglet] = useState<'photo' | 'manuel' | 'favoris'>('photo');
+  const [categorie, setCategorie] = useState<CategoriRepas>(devinerCategorie);
   const [nomManuel, setNomManuel] = useState('');
   const [calManuel, setCalManuel] = useState('');
   const [protManuel, setProtManuel] = useState('');
   const [glucManuel, setGlucManuel] = useState('');
   const [lipManuel, setLipManuel] = useState('');
+  const [sauverFavori, setSauverFavori] = useState(false);
   const [analyse, setAnalyse] = useState<AnalyseRepas | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const favoris = useLiveQuery(
+    () => userId ? db.favoris.where('userId').equals(userId).toArray() : Promise.resolve([] as FavoriRepas[]),
+    [userId],
+  ) ?? [];
+
   const reinitialiser = () => {
-    setAnalyse(null);
-    setPhotoBase64(null);
-    setNomManuel('');
-    setCalManuel('');
-    setProtManuel('');
-    setGlucManuel('');
-    setLipManuel('');
-    setErreur(null);
+    setAnalyse(null); setPhotoBase64(null);
+    setNomManuel(''); setCalManuel(''); setProtManuel(''); setGlucManuel(''); setLipManuel('');
+    setErreur(null); setSauverFavori(false);
     onFermer();
   };
 
   const onPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fichier = e.target.files?.[0];
     if (!fichier) return;
-    setChargement(true);
-    setErreur(null);
+    setChargement(true); setErreur(null);
     try {
       const { base64, mimeType } = await fileToBase64(fichier);
       setPhotoBase64(base64);
@@ -386,11 +351,12 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
     }
   };
 
-  const validerRepas = async () => {
-    const repas: Repas = analyse
+  const validerRepas = async (baseRepas?: Partial<Repas>) => {
+    const repas: Repas = baseRepas
+      ? { userId, date: TODAY, createdAt: TODAY, categorie, ...baseRepas } as Repas
+      : analyse
       ? {
-          userId,
-          date: TODAY,
+          userId, date: TODAY, createdAt: TODAY, categorie,
           nom: analyse.description || 'Repas analysé',
           calories: analyse.caloriesTotal,
           proteines: analyse.proteinesTotal,
@@ -398,54 +364,91 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
           lipides: analyse.lipidesTotal,
           aliments: analyse.aliments,
           photoBase64: photoBase64 ?? undefined,
-          createdAt: TODAY,
         }
       : {
-          userId,
-          date: TODAY,
+          userId, date: TODAY, createdAt: TODAY, categorie,
           nom: nomManuel,
           calories: parseFloat(calManuel),
           proteines: protManuel ? parseFloat(protManuel) : undefined,
           glucides: glucManuel ? parseFloat(glucManuel) : undefined,
           lipides: lipManuel ? parseFloat(lipManuel) : undefined,
-          createdAt: TODAY,
         };
+
     await db.repas.add(repas);
+
+    if (sauverFavori && repas.nom) {
+      await db.favoris.add({
+        userId,
+        nom: repas.nom,
+        calories: repas.calories,
+        proteines: repas.proteines,
+        glucides: repas.glucides,
+        lipides: repas.lipides,
+        categorie: repas.categorie,
+      });
+    }
+
     reinitialiser();
   };
+
+  const supprimerFavori = async (id: number) => {
+    await db.favoris.delete(id);
+  };
+
+  const CategorieSelector = () => (
+    <div>
+      <label className="label">Moment du repas</label>
+      <div className="grid grid-cols-4 gap-1.5">
+        {CATS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setCategorie(c.id)}
+            className={`py-2 rounded-xl text-xs font-medium flex flex-col items-center gap-0.5 transition-all ${
+              categorie === c.id
+                ? 'bg-green-500 text-white shadow-sm'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+            }`}
+          >
+            <span className="text-base">{c.emoji}</span>
+            <span>{c.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <Modal ouvert={ouvert} onFermer={reinitialiser} titre="Ajouter un repas" taille="lg">
       {/* Onglets */}
       <div className="flex gap-2 mb-5">
-        {(['photo', 'manuel'] as const).map((o) => (
+        {([
+          { id: 'photo',   label: '📸 Photo' },
+          { id: 'manuel',  label: '✏️ Manuel' },
+          { id: 'favoris', label: '⭐ Favoris' },
+        ] as const).map((o) => (
           <button
-            key={o}
-            onClick={() => { setOnglet(o); setAnalyse(null); setPhotoBase64(null); }}
+            key={o.id}
+            onClick={() => { setOnglet(o.id); setAnalyse(null); setPhotoBase64(null); }}
             className={`flex-1 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
-              onglet === o
+              onglet === o.id
                 ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-md'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
             }`}
           >
-            {o === 'photo' ? '📸 Photo' : '✏️ Manuel'}
+            {o.label}
           </button>
         ))}
       </div>
 
-      {/* ── Onglet Photo ── */}
+      {/* ── Photo ── */}
       {onglet === 'photo' && (
         <div className="space-y-4">
+          <CategorieSelector />
+
           {!photoBase64 && !chargement && (
             <>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={onPhoto}
-              />
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
               <div
                 onClick={() => fileRef.current?.click()}
                 className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-green-400 transition-colors"
@@ -471,11 +474,7 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
 
           {photoBase64 && analyse && !chargement && (
             <div className="space-y-3">
-              <img
-                src={`data:image/jpeg;base64,${photoBase64}`}
-                className="w-full h-40 object-cover rounded-2xl"
-                alt="Repas analysé"
-              />
+              <img src={`data:image/jpeg;base64,${photoBase64}`} className="w-full h-40 object-cover rounded-2xl" alt="Repas analysé" />
               <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-3">
                 <p className="font-semibold text-gray-800 dark:text-gray-200 mb-2">{analyse.description}</p>
                 <div className="grid grid-cols-4 gap-2 text-center text-xs">
@@ -484,31 +483,20 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
                   <div><p className="font-bold text-amber-600">{analyse.glucidesTotal}g</p><p className="text-gray-400">gluc.</p></div>
                   <div><p className="font-bold text-red-500">{analyse.lipidesTotal}g</p><p className="text-gray-400">lip.</p></div>
                 </div>
-                {analyse.aliments.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {analyse.aliments.map((a, i) => (
-                      <div key={i} className="flex justify-between text-xs text-gray-500">
-                        <span>{a.nom} ({a.portion})</span>
-                        <span>{a.calories} kcal</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
               <div className="flex gap-2">
-                <Button variante="secondary" onClick={() => { setAnalyse(null); setPhotoBase64(null); }}>
-                  Réessayer
-                </Button>
-                <Button pleine onClick={validerRepas}>✅ Valider</Button>
+                <Button variante="secondary" onClick={() => { setAnalyse(null); setPhotoBase64(null); }}>Réessayer</Button>
+                <Button pleine onClick={() => validerRepas()}>✅ Valider</Button>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Onglet Manuel ── */}
+      {/* ── Manuel ── */}
       {onglet === 'manuel' && (
         <div className="space-y-4">
+          <CategorieSelector />
           <div>
             <label className="label">Nom du repas</label>
             <input className="input" placeholder="Ex: Salade de quinoa" value={nomManuel} onChange={(e) => setNomManuel(e.target.value)} />
@@ -531,9 +519,56 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
               <input className="input" type="number" placeholder="12" value={lipManuel} onChange={(e) => setLipManuel(e.target.value)} />
             </div>
           </div>
-          <Button pleine taille="lg" onClick={validerRepas} disabled={!nomManuel || !calManuel}>
+
+          {nomManuel && calManuel && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sauverFavori}
+                onChange={(e) => setSauverFavori(e.target.checked)}
+                className="w-4 h-4 rounded accent-green-500"
+              />
+              <span className="text-sm text-gray-600 dark:text-gray-400">⭐ Sauvegarder comme favori</span>
+            </label>
+          )}
+
+          <Button pleine taille="lg" onClick={() => validerRepas()} disabled={!nomManuel || !calManuel}>
             ✅ Ajouter ce repas
           </Button>
+        </div>
+      )}
+
+      {/* ── Favoris ── */}
+      {onglet === 'favoris' && (
+        <div className="space-y-3">
+          {favoris.length === 0 ? (
+            <div className="flex flex-col items-center py-10 text-gray-400">
+              <span className="text-4xl mb-2">⭐</span>
+              <p className="text-sm font-medium">Aucun favori enregistré</p>
+              <p className="text-xs mt-1 text-center">Ajoutez un repas manuellement et cochez "Sauvegarder comme favori"</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-400">Appuyez sur un favori pour l'ajouter directement</p>
+              <div className="space-y-2">
+                {favoris.map((fav) => (
+                  <div key={fav.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl">
+                    <span className="text-xl">{CATS.find((c) => c.id === fav.categorie)?.emoji ?? '🍽️'}</span>
+                    <div className="flex-1 min-w-0" onClick={() => validerRepas({ nom: fav.nom, calories: fav.calories, proteines: fav.proteines, glucides: fav.glucides, lipides: fav.lipides })}>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{fav.nom}</p>
+                      <p className="text-xs text-gray-400">{fav.calories} kcal</p>
+                    </div>
+                    <button
+                      onClick={() => supprimerFavori(fav.id!)}
+                      className="p-1.5 text-gray-300 hover:text-red-400 rounded-lg"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </Modal>
