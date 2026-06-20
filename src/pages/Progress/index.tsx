@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
 import { db } from '../../db/database';
 import { useStore } from '../../store/useStore';
@@ -34,6 +34,12 @@ export function Progress() {
 
   const mesures = useLiveQuery(
     () => userId ? db.mesures.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Mesure[]),
+    [userId],
+  ) ?? [];
+
+  const debut7j = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+  const repas7j = useLiveQuery(
+    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debut7j).toArray() : Promise.resolve([]),
     [userId],
   ) ?? [];
 
@@ -94,6 +100,18 @@ export function Progress() {
     await db.mesures.add(m);
     setTourDeTaille(''); setHanches(''); setPoitrine(''); setNoteM(''); setModalMesure(false);
   };
+
+  // Données calories 7 derniers jours
+  const donneesCalories = Array.from({ length: 7 }, (_, i) => {
+    const d = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
+    const cal = repas7j.filter((r) => r.date === d).reduce((s, r) => s + r.calories, 0);
+    return {
+      date: d,
+      label: i === 6 ? "Auj." : format(subDays(new Date(), 6 - i), 'EEE', { locale: fr }),
+      calories: cal,
+    };
+  });
+  const objectifCal = user?.objectifCalories ?? 0;
 
   const formatDate = (dateStr: string) => {
     try { return format(new Date(dateStr), 'd MMM', { locale: fr }); }
@@ -159,6 +177,53 @@ export function Progress() {
         {resteAPerdre <= 0 && pesees.length > 0 && (
           <p className="mt-4 text-center font-bold text-white text-lg">🏅 Objectif atteint !</p>
         )}
+      </Card>
+
+      {/* Graphique calories 7 jours */}
+      <Card>
+        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Calories — 7 derniers jours</h3>
+        {objectifCal > 0 && (
+          <p className="text-xs text-gray-400 mb-3">Objectif : {objectifCal} kcal/j</p>
+        )}
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={donneesCalories} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}`} />
+            <Tooltip
+              formatter={(val) => [`${val ?? 0} kcal`, 'Calories']}
+              labelStyle={{ color: '#6b7280', fontSize: 12 }}
+              contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12 }}
+            />
+            {objectifCal > 0 && (
+              <ReferenceLine
+                y={objectifCal}
+                stroke="#22c55e"
+                strokeDasharray="5 3"
+                label={{ value: 'Obj.', position: 'right', fontSize: 10, fill: '#22c55e' }}
+              />
+            )}
+            <Bar dataKey="calories" radius={[6, 6, 0, 0]} maxBarSize={36}>
+              {donneesCalories.map((d, i) => (
+                <Cell
+                  key={i}
+                  fill={
+                    d.calories === 0
+                      ? '#e5e7eb'
+                      : objectifCal > 0 && d.calories > objectifCal
+                      ? '#f87171'
+                      : '#14b8a6'
+                  }
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="flex gap-4 mt-2 justify-center text-xs text-gray-400">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" /> Sous l'objectif</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-400 inline-block" /> Dépassé</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block" /> Pas de données</span>
+        </div>
       </Card>
 
       {/* Mesures corporelles */}
