@@ -8,15 +8,17 @@ import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
 import { calculerStreak, journeesPalfaitesDesSemaine } from '../../utils/streak';
 import { BADGES_CONFIG, evaluerBadges } from '../../utils/badges';
-import type { BadgeCle } from '../../types';
+import type { BadgeCle, Journee, Pesee, BadgeDebloque, Repas } from '../../types';
 
 export function Challenges() {
   const { user } = useStore();
 
-  const journees    = useLiveQuery(() => db.journees.toArray(), []) ?? [];
-  const pesees      = useLiveQuery(() => db.pesees.orderBy('date').toArray(), []) ?? [];
-  const badgesDB    = useLiveQuery(() => db.badges.toArray(), []) ?? [];
-  const repasPhotos = useLiveQuery(() => db.repas.filter((r) => !!r.photoBase64).count(), []) ?? 0;
+  const userId = user?.id ?? 0;
+
+  const journees    = useLiveQuery(() => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([] as Journee[]), [userId]) ?? [];
+  const pesees      = useLiveQuery(() => userId ? db.pesees.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Pesee[]), [userId]) ?? [];
+  const badgesDB    = useLiveQuery(() => userId ? db.badges.where('userId').equals(userId).toArray() : Promise.resolve([] as BadgeDebloque[]), [userId]) ?? [];
+  const repasPhotos = useLiveQuery(() => userId ? db.repas.where('userId').equals(userId).filter((r) => !!r.photoBase64).count() : Promise.resolve(0), [userId]) ?? 0;
 
   // Semaine courante
   const today = new Date();
@@ -26,8 +28,8 @@ export function Challenges() {
 
   // Hook au niveau composant (pas imbriqué dans JSX)
   const repasSemaine = useLiveQuery(
-    () => db.repas.where('date').aboveOrEqual(debutSemaineStr).toArray(),
-    [debutSemaineStr],
+    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debutSemaineStr).toArray() : Promise.resolve([] as Repas[]),
+    [debutSemaineStr, userId],
   ) ?? [];
 
   const streak = calculerStreak(journees);

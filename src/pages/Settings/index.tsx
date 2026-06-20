@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -9,7 +10,8 @@ import { db } from '../../db/database';
 import type { ChallengeId } from '../../types';
 
 export function Settings() {
-  const { user, sauvegarderUser } = useStore();
+  const navigate = useNavigate();
+  const { user, sauvegarderUser, deconnecterProfil } = useStore();
 
   // Formulaire local (pré-rempli avec les données utilisateur)
   const [prenom, setPrenom]               = useState(user?.prenom ?? '');
@@ -254,6 +256,14 @@ export function Settings() {
       <Button pleine taille="lg" onClick={sauvegarder}>
         {messageSauvegarde ? '✅ Sauvegardé !' : '💾 Sauvegarder les modifications'}
       </Button>
+
+      {/* Changer de profil */}
+      <Card>
+        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Profils</h3>
+        <Button variante="secondary" pleine onClick={() => { deconnecterProfil(); navigate('/profils'); }}>
+          👤 Changer de profil
+        </Button>
+      </Card>
 
       {/* Données */}
       <Card>

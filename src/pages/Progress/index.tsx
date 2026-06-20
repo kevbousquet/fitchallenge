@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import type { Pesee } from '../../types';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
@@ -25,8 +26,12 @@ function moyenneMobile(donnees: { date: string; poids: number }[], n: number) {
 
 export function Progress() {
   const { user } = useStore();
+  const userId = user?.id ?? 0;
 
-  const pesees = useLiveQuery(() => db.pesees.orderBy('date').toArray(), []) ?? [];
+  const pesees = useLiveQuery(
+    () => userId ? db.pesees.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Pesee[]),
+    [userId],
+  ) ?? [];
   const [modalPesee, setModalPesee] = useState(false);
   const [nouveauPoids, setNouveauPoids] = useState('');
   const [noteP, setNoteP] = useState('');
@@ -61,8 +66,9 @@ export function Progress() {
 
   const ajouterPesee = async () => {
     const poids = parseFloat(nouveauPoids);
-    if (isNaN(poids)) return;
+    if (isNaN(poids) || !userId) return;
     await db.pesees.add({
+      userId,
       date: format(new Date(), 'yyyy-MM-dd'),
       poids,
       note: noteP || undefined,

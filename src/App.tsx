@@ -1,25 +1,31 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from './db/database';
 import { useStore } from './store/useStore';
 import { seedDemoData } from './db/seed';
-import { Onboarding }  from './pages/Onboarding';
-import { Home }        from './pages/Home';
-import { Meals }       from './pages/Meals';
-import { Challenges }  from './pages/Challenges';
-import { Progress }    from './pages/Progress';
-import { Settings }    from './pages/Settings';
+import { Onboarding }      from './pages/Onboarding';
+import { ProfileSelector } from './pages/ProfileSelector';
+import { Home }            from './pages/Home';
+import { Meals }           from './pages/Meals';
+import { Challenges }      from './pages/Challenges';
+import { Progress }        from './pages/Progress';
+import { Settings }        from './pages/Settings';
 
-export default function App() {
+function AppRoutes() {
   const { user, chargement, chargerUser, chargerJournee } = useStore();
+  const nombreUtilisateurs = useLiveQuery(() => db.users.count(), []) ?? null;
 
   useEffect(() => {
-    // Insère les données de démo au premier lancement, puis charge le profil
     seedDemoData().then(() => {
-      chargerUser().then(() => chargerJournee());
+      chargerUser().then(() => {
+        if (localStorage.getItem('fitchallenge_userId')) {
+          chargerJournee();
+        }
+      });
     });
   }, []);
 
-  // Applique le thème sombre selon les préférences sauvegardées
   useEffect(() => {
     if (user?.themeSombre) {
       document.documentElement.classList.add('dark');
@@ -28,7 +34,7 @@ export default function App() {
     }
   }, [user?.themeSombre]);
 
-  if (chargement) {
+  if (chargement || nombreUtilisateurs === null) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-500 flex flex-col items-center justify-center gap-4">
         <div className="text-6xl">💪</div>
@@ -38,22 +44,46 @@ export default function App() {
     );
   }
 
+  // Aucun profil → onboarding
+  if (nombreUtilisateurs === 0) {
+    return (
+      <Routes>
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="*" element={<Navigate to="/onboarding" replace />} />
+      </Routes>
+    );
+  }
+
+  // Profils existants mais aucun actif → sélecteur
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/profils" element={<ProfileSelector />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="*" element={<Navigate to="/profils" replace />} />
+      </Routes>
+    );
+  }
+
+  // Profil actif → app complète
+  return (
+    <Routes>
+      <Route path="/"            element={<Home />} />
+      <Route path="/repas"       element={<Meals />} />
+      <Route path="/challenges"  element={<Challenges />} />
+      <Route path="/progression" element={<Progress />} />
+      <Route path="/reglages"    element={<Settings />} />
+      <Route path="/profils"     element={<ProfileSelector />} />
+      <Route path="/onboarding"  element={<Onboarding />} />
+      <Route path="*"            element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Onboarding si pas de profil */}
-        <Route path="/onboarding" element={<Onboarding />} />
-
-        {/* Redirige vers l'onboarding si l'utilisateur n'est pas configuré */}
-        <Route path="/" element={user ? <Home /> : <Navigate to="/onboarding" replace />} />
-        <Route path="/repas"       element={user ? <Meals />      : <Navigate to="/onboarding" replace />} />
-        <Route path="/challenges"  element={user ? <Challenges /> : <Navigate to="/onboarding" replace />} />
-        <Route path="/progression" element={user ? <Progress />   : <Navigate to="/onboarding" replace />} />
-        <Route path="/reglages"    element={user ? <Settings />   : <Navigate to="/onboarding" replace />} />
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AppRoutes />
     </BrowserRouter>
   );
 }

@@ -8,15 +8,21 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import type { Repas } from '../../types';
+import { useStore } from '../../store/useStore';
 
 export function Meals() {
   const [dateSelectionnee, setDateSelectionnee] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [repasEdite, setRepasEdite] = useState<Repas | null>(null);
   const [modalSuppression, setModalSuppression] = useState<number | null>(null);
 
+  const { user } = useStore();
+  const userId = user?.id ?? 0;
+
   const repas = useLiveQuery(
-    () => db.repas.where('date').equals(dateSelectionnee).reverse().sortBy('createdAt'),
-    [dateSelectionnee],
+    () => userId
+      ? db.repas.where('userId').equals(userId).and((r) => r.date === dateSelectionnee).reverse().sortBy('createdAt')
+      : Promise.resolve([] as Repas[]),
+    [dateSelectionnee, userId],
   ) ?? [];
 
   const totalCal = repas.reduce((s, r) => s + r.calories, 0);

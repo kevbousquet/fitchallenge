@@ -5,13 +5,13 @@ export interface User {
   prenom: string;
   sexe: 'homme' | 'femme';
   age: number;
-  taille: number;          // cm
-  poidsInitial: number;    // kg
-  poidsObjectif: number;   // kg
-  dateCible?: string;      // ISO date YYYY-MM-DD
-  objectifCalories: number; // kcal/jour
-  objectifPas: number;     // ex. 8000
-  objectifVerres: number;  // ex. 8
+  taille: number;
+  poidsInitial: number;
+  poidsObjectif: number;
+  dateCible?: string;
+  objectifCalories: number;
+  objectifPas: number;
+  objectifVerres: number;
   challengesActifs: ChallengeId[];
   themeSombre: boolean;
   createdAt: string;
@@ -47,12 +47,13 @@ export interface AlimentDetail {
 
 export interface Repas {
   id?: number;
-  date: string;            // YYYY-MM-DD
+  userId: number;
+  date: string;
   nom: string;
   calories: number;
-  proteines?: number;      // g
-  glucides?: number;       // g
-  lipides?: number;        // g
+  proteines?: number;
+  glucides?: number;
+  lipides?: number;
   photoBase64?: string;
   aliments?: AlimentDetail[];
   createdAt: string;
@@ -60,12 +61,13 @@ export interface Repas {
 
 export interface Journee {
   id?: number;
-  date: string;            // YYYY-MM-DD (unique)
+  userId: number;
+  date: string;
   pas: number;
   verresBus: number;
   sportFait: boolean;
   typeSport?: 'cardio' | 'musculation' | 'marche' | 'autre';
-  dureeSport?: number;     // minutes
+  dureeSport?: number;
   sommeilOk: boolean;
   pasDeGrignotage: boolean;
   pasDAlcool: boolean;
@@ -77,8 +79,9 @@ export interface Journee {
 
 export interface Pesee {
   id?: number;
-  date: string;            // YYYY-MM-DD
-  poids: number;           // kg
+  userId: number;
+  date: string;
+  poids: number;
   note?: string;
 }
 
@@ -105,11 +108,11 @@ export interface BadgeInfo {
 
 export interface BadgeDebloque {
   id?: number;
+  userId: number;
   cle: BadgeCle;
   debloqueLeDate: string;
 }
 
-// Résultat de l'analyse Claude d'un repas
 export interface AnalyseRepas {
   aliments: AlimentDetail[];
   caloriesTotal: number;

@@ -20,9 +20,17 @@ const TODAY = format(new Date(), 'yyyy-MM-dd');
 export function Home() {
   const { user, journeeAujourdhui, mettreAJourJournee } = useStore();
 
-  // Requêtes en temps réel via Dexie
-  const repasAujourdhui = useLiveQuery(() => db.repas.where('date').equals(TODAY).toArray(), []) ?? [];
-  const toutesJournees = useLiveQuery(() => db.journees.toArray(), []) ?? [];
+  const userId = user?.id ?? 0;
+
+  // Requêtes en temps réel via Dexie, filtrées par utilisateur actif
+  const repasAujourdhui = useLiveQuery(
+    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date === TODAY).toArray() : Promise.resolve([]),
+    [userId],
+  ) ?? [];
+  const toutesJournees = useLiveQuery(
+    () => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([]),
+    [userId],
+  ) ?? [];
 
   const streak = calculerStreak(toutesJournees);
   const caloriesConsommees = repasAujourdhui.reduce((s, r) => s + r.calories, 0);
@@ -294,7 +302,7 @@ export function Home() {
       )}
 
       {/* Modal ajout repas */}
-      <ModalAjoutRepas ouvert={modalRepas} onFermer={() => setModalRepas(false)} />
+      <ModalAjoutRepas ouvert={modalRepas} onFermer={() => setModalRepas(false)} userId={userId} />
 
       {/* Modal sport */}
       <Modal ouvert={modalSport} onFermer={() => setModalSport(false)} titre="Séance de sport">
@@ -336,7 +344,7 @@ export function Home() {
 }
 
 // ─── Sous-composant : Modal d'ajout de repas ────────────────────────────────
-function ModalAjoutRepas({ ouvert, onFermer }: { ouvert: boolean; onFermer: () => void }) {
+function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFermer: () => void; userId: number }) {
   const [onglet, setOnglet] = useState<'photo' | 'manuel'>('photo');
   const [nomManuel, setNomManuel] = useState('');
   const [calManuel, setCalManuel] = useState('');
@@ -381,6 +389,7 @@ function ModalAjoutRepas({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
   const validerRepas = async () => {
     const repas: Repas = analyse
       ? {
+          userId,
           date: TODAY,
           nom: analyse.description || 'Repas analysé',
           calories: analyse.caloriesTotal,
@@ -392,6 +401,7 @@ function ModalAjoutRepas({ ouvert, onFermer }: { ouvert: boolean; onFermer: () =
           createdAt: TODAY,
         }
       : {
+          userId,
           date: TODAY,
           nom: nomManuel,
           calories: parseFloat(calManuel),
