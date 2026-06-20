@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -17,6 +17,7 @@ import { CircularGauge } from '../../components/ui/CircularGauge';
 import { Modal } from '../../components/ui/Modal';
 import { CHALLENGES } from '../../utils/challenges';
 import { calculerStreak } from '../../utils/streak';
+import { useStepCounter } from '../../hooks/useStepCounter';
 import { analyserRepasParPhoto, fileToBase64 } from '../../services/claudeApi';
 import type { Repas, AnalyseRepas, ChallengeId, CategoriRepas, FavoriRepas } from '../../types';
 
@@ -117,6 +118,48 @@ export function Home() {
     }
   };
 
+  // Auto step counter
+  const pasBaseRef = useRef(0);
+  const [nouveauPas, setNouveauPas] = useState(0);
+  const nouveauPasRef = useRef(0);
+
+  const onNouveauPas = useCallback((total: number) => {
+    nouveauPasRef.current = total;
+    setNouveauPas(total);
+  }, []);
+
+  const stepCounter = useStepCounter(onNouveauPas);
+
+  // Auto-save every 10 seconds while counter is active
+  useEffect(() => {
+    if (!stepCounter.actif) return;
+    const interval = setInterval(async () => {
+      if (nouveauPasRef.current > 0) {
+        const total = pasBaseRef.current + nouveauPasRef.current;
+        await mettreAJourJournee({ pas: total });
+        if (total >= (user?.objectifPas ?? 8000)) lancerConfettis();
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [stepCounter.actif, user?.objectifPas]);
+
+  const demarrerCompteurPas = async () => {
+    pasBaseRef.current = journeeAujourdhui?.pas ?? 0;
+    setNouveauPas(0);
+    nouveauPasRef.current = 0;
+    await stepCounter.demarrer();
+  };
+
+  const arreterCompteurPas = async () => {
+    stepCounter.arreter();
+    const total = pasBaseRef.current + nouveauPasRef.current;
+    if (nouveauPasRef.current > 0) {
+      await mettreAJourJournee({ pas: total });
+      if (total >= (user?.objectifPas ?? 8000)) lancerConfettis();
+    }
+    setNouveauPas(0);
+  };
+
   const renderChallenge = (id: ChallengeId) => {
     const c = CHALLENGES[id];
     const Icon = CHALLENGE_ICONS[id];
@@ -134,26 +177,60 @@ export function Home() {
           </span>
         );
         break;
-      case 'pas':
-        estCoche = journeeAujourdhui.pas >= user.objectifPas;
+      case 'pas': {
+        const totalPas = stepCounter.actif
+          ? pasBaseRef.current + nouveauPas
+          : journeeAujourdhui.pas;
+        estCoche = totalPas >= user.objectifPas;
         contenu = (
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-xs text-slate-400 tabular-nums">
-              {journeeAujourdhui.pas.toLocaleString('fr')} / {user.objectifPas.toLocaleString('fr')}
-            </span>
-            <div className="flex items-center gap-1">
-              <input
-                className="w-20 text-xs border border-slate-200 rounded-lg px-2 py-0.5 dark:bg-gray-800 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-green-500"
-                type="number" placeholder="saisir"
-                value={pasInput}
-                onChange={(e) => setPasInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saisirPas()}
-              />
-              <button onClick={saisirPas} className="text-xs text-green-600 font-bold px-1">OK</button>
+          <div className="flex flex-col gap-1.5 mt-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 tabular-nums">
+                {totalPas.toLocaleString('fr')} / {user.objectifPas.toLocaleString('fr')}
+              </span>
+              {stepCounter.actif && (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                  En cours
+                </span>
+              )}
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {!stepCounter.actif ? (
+                <>
+                  <button
+                    onClick={demarrerCompteurPas}
+                    className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1"
+                  >
+                    <Footprints size={11} /> Comptage auto
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <input
+                      className="w-16 text-xs border border-slate-200 rounded-lg px-2 py-0.5 dark:bg-gray-800 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-green-500"
+                      type="number" placeholder="ou saisir"
+                      value={pasInput}
+                      onChange={(e) => setPasInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saisirPas()}
+                    />
+                    <button onClick={saisirPas} className="text-xs text-green-600 font-bold px-1">OK</button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={arreterCompteurPas}
+                  className="text-xs bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2.5 py-1 rounded-lg font-semibold"
+                >
+                  Arrêter
+                </button>
+              )}
+            </div>
+            {stepCounter.erreur && (
+              <p className="text-xs text-red-400">{stepCounter.erreur}</p>
+            )}
           </div>
         );
         break;
+      }
       case 'sport':
         estCoche = journeeAujourdhui.sportFait;
         contenu = journeeAujourdhui.sportFait ? (
