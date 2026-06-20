@@ -9,7 +9,7 @@ import { db } from '../../db/database';
 import type { ChallengeId } from '../../types';
 
 export function Settings() {
-  const { user, sauvegarderUser, chargerUser } = useStore();
+  const { user, sauvegarderUser } = useStore();
 
   // Formulaire local (pré-rempli avec les données utilisateur)
   const [prenom, setPrenom]               = useState(user?.prenom ?? '');

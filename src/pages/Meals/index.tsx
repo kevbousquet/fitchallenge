@@ -34,7 +34,13 @@ export function Meals() {
 
   const sauvegarderEdition = async () => {
     if (!repasEdite?.id) return;
-    await db.repas.update(repasEdite.id, repasEdite);
+    await db.repas.update(repasEdite.id, {
+      nom: repasEdite.nom,
+      calories: repasEdite.calories,
+      proteines: repasEdite.proteines,
+      glucides: repasEdite.glucides,
+      lipides: repasEdite.lipides,
+    });
     setRepasEdite(null);
   };
 
