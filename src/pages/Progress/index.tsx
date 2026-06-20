@@ -39,7 +39,7 @@ export function Progress() {
 
   const debut7j = format(subDays(new Date(), 6), 'yyyy-MM-dd');
   const repas7j = useLiveQuery(
-    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debut7j).toArray() : Promise.resolve([]),
+    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debut7j).toArray() : Promise.resolve([] as import('../../types').Repas[]),
     [userId],
   ) ?? [];
 
@@ -58,7 +58,7 @@ export function Progress() {
   const premierePesee = pesees.length > 0 ? pesees[0] : null;
   const derniereMesure = mesures.length > 0 ? mesures[mesures.length - 1] : null;
 
-  const poidsInitial = user?.poidsInitial ?? (premierePesee?.poids ?? 0);
+  const poidsInitial = premierePesee?.poids ?? user?.poidsInitial ?? 0;
   const poidsObjectif = user?.poidsObjectif ?? 0;
   const poidsActuel = dernierePesee?.poids ?? poidsInitial;
   const perteTotale = poidsInitial - poidsActuel;
