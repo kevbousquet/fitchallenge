@@ -13,11 +13,11 @@ export function Card({ children, className, gradient, onClick }: Props) {
     <div
       onClick={onClick}
       className={clsx(
-        'rounded-3xl p-4 shadow-sm',
+        'rounded-2xl p-4',
         gradient
-          ? 'bg-gradient-to-br from-green-500 to-teal-500 text-white'
-          : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700',
-        onClick && 'cursor-pointer active:scale-98 transition-transform',
+          ? 'bg-gradient-to-br from-green-600 to-teal-600 text-white shadow-lg shadow-green-600/25'
+          : 'bg-white dark:bg-gray-900 shadow-sm shadow-black/5 border border-slate-100 dark:border-gray-800',
+        onClick && 'cursor-pointer active:scale-[0.98] transition-transform',
         className,
       )}
     >

@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Footprints, Droplets, Bell, BellOff, UtensilsCrossed, Scale, Moon, Sun,
+  Check, Save, User, Upload, Trash2, Target, Dumbbell, Ban, Wine, Candy,
+  Leaf, ChevronRight,
+} from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -8,6 +13,20 @@ import { TOUS_LES_CHALLENGES } from '../../utils/challenges';
 import { calculerObjectifCalories } from '../../utils/bmr';
 import { db } from '../../db/database';
 import type { ChallengeId } from '../../types';
+
+type IconComp = React.ComponentType<{ size?: number; className?: string }>;
+
+const CHALLENGE_ICONS: Record<ChallengeId, IconComp> = {
+  deficit_calorique: Target,
+  pas:               Footprints,
+  sport:             Dumbbell,
+  hydratation:       Droplets,
+  sommeil:           Moon,
+  pas_de_grignotage: Ban,
+  pas_alcool:        Wine,
+  pas_sucre:         Candy,
+  legumes:           Leaf,
+};
 
 export function Settings() {
   const navigate = useNavigate();
@@ -24,7 +43,6 @@ export function Settings() {
   const [challenges, setChallenges]       = useState<ChallengeId[]>(user?.challengesActifs ?? []);
   const [themeSombre, setThemeSombre]     = useState(user?.themeSombre ?? false);
 
-  // Notifications
   const [notifRepasActif, setNotifRepasActif]   = useState(user?.notifRepasActif ?? false);
   const [notifRepasHeure, setNotifRepasHeure]   = useState(user?.notifRepasHeure ?? '20:00');
   const [notifPeseeActif, setNotifPeseeActif]   = useState(user?.notifPeseeActif ?? false);
@@ -102,7 +120,7 @@ export function Settings() {
   const Toggle = ({ actif, onToggle }: { actif: boolean; onToggle: () => void }) => (
     <button
       onClick={onToggle}
-      className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${actif ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+      className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${actif ? 'bg-green-500' : 'bg-slate-200 dark:bg-gray-700'}`}
     >
       <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${actif ? 'left-6' : 'left-0.5'}`} />
     </button>
@@ -112,7 +130,7 @@ export function Settings() {
     <Layout titre="Profil & Réglages">
       {/* Infos personnelles */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Profil</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">Profil</h3>
         <div className="space-y-3">
           <div>
             <label className="label">Prénom</label>
@@ -122,8 +140,8 @@ export function Settings() {
             <label className="label">Sexe</label>
             <div className="flex gap-2">
               {(['homme', 'femme'] as const).map((s) => (
-                <button key={s} onClick={() => setSexe(s)} className={`flex-1 py-2.5 rounded-2xl border-2 font-medium text-sm transition-all ${sexe === s ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'border-gray-200 dark:border-gray-700 text-gray-500'}`}>
-                  {s === 'homme' ? '♂ Homme' : '♀ Femme'}
+                <button key={s} onClick={() => setSexe(s)} className={`flex-1 py-2.5 rounded-2xl border-2 font-medium text-sm transition-all ${sexe === s ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'border-slate-200 dark:border-gray-700 text-slate-500'}`}>
+                  {s === 'homme' ? 'Homme' : 'Femme'}
                 </button>
               ))}
             </div>
@@ -147,7 +165,7 @@ export function Settings() {
 
       {/* Objectif calorique */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Objectif calorique</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">Objectif calorique</h3>
         <div className="flex items-end gap-3">
           <div className="flex-1">
             <label className="label">Calories / jour</label>
@@ -159,14 +177,18 @@ export function Settings() {
 
       {/* Objectifs quotidiens */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Objectifs quotidiens</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">Objectifs quotidiens</h3>
         <div className="space-y-3">
           <div>
-            <label className="label">👣 Objectif de pas</label>
+            <label className="label flex items-center gap-1.5">
+              <Footprints size={13} className="text-slate-400" /> Objectif de pas
+            </label>
             <input className="input" type="number" step="500" min="1000" max="30000" value={objectifPas} onChange={(e) => setObjectifPas(parseInt(e.target.value))} />
           </div>
           <div>
-            <label className="label">💧 Objectif verres d'eau</label>
+            <label className="label flex items-center gap-1.5">
+              <Droplets size={13} className="text-slate-400" /> Objectif verres d'eau
+            </label>
             <input className="input" type="number" min="4" max="20" value={objectifVerres} onChange={(e) => setObjectifVerres(parseInt(e.target.value))} />
           </div>
         </div>
@@ -174,27 +196,32 @@ export function Settings() {
 
       {/* Rappels / Notifications */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Rappels</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">Rappels</h3>
 
         {permissionNotif !== 'granted' && (
           <button
             onClick={demanderPermissionNotif}
-            className="w-full mb-4 py-2.5 rounded-2xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm font-semibold border border-green-200 dark:border-green-700"
+            className="w-full mb-4 py-2.5 rounded-2xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm font-semibold border border-green-200 dark:border-green-700 flex items-center justify-center gap-2"
           >
-            🔔 Activer les notifications
+            <Bell size={15} /> Activer les notifications
           </button>
         )}
         {permissionNotif === 'denied' && (
-          <p className="text-xs text-red-500 mb-3">Les notifications sont bloquées. Autorisez-les dans les réglages de votre navigateur.</p>
+          <div className="flex items-start gap-2 mb-3">
+            <BellOff size={14} className="text-red-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-red-500">Les notifications sont bloquées. Autorisez-les dans les réglages de votre navigateur.</p>
+          </div>
         )}
 
         <div className="space-y-4">
-          {/* Rappel repas */}
           <div className={`space-y-2 ${permissionNotif !== 'granted' ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">🍽️ Rappel repas</p>
-                <p className="text-xs text-gray-400">Si aucun repas saisi dans la journée</p>
+              <div className="flex items-start gap-2">
+                <UtensilsCrossed size={15} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Rappel repas</p>
+                  <p className="text-xs text-slate-400">Si aucun repas saisi dans la journée</p>
+                </div>
               </div>
               <Toggle actif={notifRepasActif} onToggle={() => setNotifRepasActif(!notifRepasActif)} />
             </div>
@@ -203,14 +230,16 @@ export function Settings() {
             )}
           </div>
 
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
+          <div className="h-px bg-slate-100 dark:bg-gray-800" />
 
-          {/* Rappel pesée */}
           <div className={`space-y-2 ${permissionNotif !== 'granted' ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">⚖️ Rappel pesée</p>
-                <p className="text-xs text-gray-400">Si pas de pesée depuis 3 jours</p>
+              <div className="flex items-start gap-2">
+                <Scale size={15} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Rappel pesée</p>
+                  <p className="text-xs text-slate-400">Si pas de pesée depuis 3 jours</p>
+                </div>
               </div>
               <Toggle actif={notifPeseeActif} onToggle={() => setNotifPeseeActif(!notifPeseeActif)} />
             </div>
@@ -223,16 +252,19 @@ export function Settings() {
 
       {/* Challenges actifs */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Challenges actifs</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Challenges actifs</h3>
         <div className="space-y-2">
           {TOUS_LES_CHALLENGES.map((c) => {
             const actif = challenges.includes(c.id);
+            const CIcon = CHALLENGE_ICONS[c.id];
             return (
-              <button key={c.id} onClick={() => toggleChallenge(c.id)} className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left ${actif ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-100 dark:border-gray-700'}`}>
-                <span className="text-xl">{c.emoji}</span>
-                <span className={`flex-1 text-sm font-medium ${actif ? 'text-green-700 dark:text-green-300' : 'text-gray-600 dark:text-gray-400'}`}>{c.label}</span>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs ${actif ? 'border-green-500 bg-green-500 text-white' : 'border-gray-300'}`}>
-                  {actif && '✓'}
+              <button key={c.id} onClick={() => toggleChallenge(c.id)} className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left ${actif ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-slate-100 dark:border-gray-700'}`}>
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${actif ? 'bg-green-600' : 'bg-slate-100 dark:bg-gray-800'}`}>
+                  <CIcon size={15} className={actif ? 'text-white' : 'text-slate-400'} />
+                </div>
+                <span className={`flex-1 text-sm font-medium ${actif ? 'text-green-700 dark:text-green-300' : 'text-slate-600 dark:text-slate-400'}`}>{c.label}</span>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${actif ? 'border-green-500 bg-green-500' : 'border-slate-300'}`}>
+                  {actif && <Check size={11} className="text-white" />}
                 </div>
               </button>
             );
@@ -242,15 +274,18 @@ export function Settings() {
 
       {/* Apparence */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Apparence</h3>
-        <button onClick={() => setThemeSombre(!themeSombre)} className={`w-full flex items-center justify-between p-3 rounded-2xl border-2 transition-all ${themeSombre ? 'border-gray-600 bg-gray-800' : 'border-gray-100'}`}>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Apparence</h3>
+        <button onClick={() => setThemeSombre(!themeSombre)} className={`w-full flex items-center justify-between p-3 rounded-2xl border-2 transition-all ${themeSombre ? 'border-gray-600 bg-gray-800' : 'border-slate-100'}`}>
           <div className="flex items-center gap-3">
-            <span className="text-2xl">{themeSombre ? '🌙' : '☀️'}</span>
-            <span className={`font-medium text-sm ${themeSombre ? 'text-gray-200' : 'text-gray-700'}`}>
+            {themeSombre
+              ? <Moon size={20} className="text-indigo-400" />
+              : <Sun size={20} className="text-amber-500" />
+            }
+            <span className={`font-medium text-sm ${themeSombre ? 'text-slate-200' : 'text-slate-700'}`}>
               Mode {themeSombre ? 'sombre' : 'clair'}
             </span>
           </div>
-          <div className={`w-12 h-6 rounded-full transition-colors relative ${themeSombre ? 'bg-green-500' : 'bg-gray-200'}`}>
+          <div className={`w-12 h-6 rounded-full transition-colors relative ${themeSombre ? 'bg-green-500' : 'bg-slate-200'}`}>
             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${themeSombre ? 'left-6' : 'left-0.5'}`} />
           </div>
         </button>
@@ -258,27 +293,41 @@ export function Settings() {
 
       {/* Sauvegarder */}
       <Button pleine taille="lg" onClick={sauvegarder}>
-        {messageSauvegarde ? '✅ Sauvegardé !' : '💾 Sauvegarder les modifications'}
+        {messageSauvegarde
+          ? <><Check size={16} /> Sauvegardé !</>
+          : <><Save size={16} /> Sauvegarder les modifications</>
+        }
       </Button>
 
       {/* Profils */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Profils</h3>
-        <Button variante="secondary" pleine onClick={() => { deconnecterProfil(); navigate('/profils'); }}>
-          👤 Changer de profil
-        </Button>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Profils</h3>
+        <button
+          onClick={() => { deconnecterProfil(); navigate('/profils'); }}
+          className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-200 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <User size={16} className="text-slate-400" />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Changer de profil</span>
+          </div>
+          <ChevronRight size={16} className="text-slate-300" />
+        </button>
       </Card>
 
       {/* Données */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Données</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Données</h3>
         <div className="space-y-2">
-          <Button variante="secondary" pleine onClick={exporterDonnees}>📤 Exporter mes données (JSON)</Button>
-          <Button variante="danger" pleine onClick={resetApp}>🗑️ Réinitialiser l'application</Button>
+          <Button variante="secondary" pleine onClick={exporterDonnees}>
+            <Upload size={15} /> Exporter mes données (JSON)
+          </Button>
+          <Button variante="danger" pleine onClick={resetApp}>
+            <Trash2 size={15} /> Réinitialiser l'application
+          </Button>
         </div>
       </Card>
 
-      <div className="text-center text-xs text-gray-400 pb-4">
+      <div className="text-center text-xs text-slate-400 pb-4">
         FitChallenge v0.2 · Toutes les données sont stockées sur cet appareil uniquement
       </div>
     </Layout>

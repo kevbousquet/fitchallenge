@@ -5,6 +5,7 @@ import { fr } from 'date-fns/locale';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
+import { Ruler, Scale, Trash2, Check, Trophy } from 'lucide-react';
 import { db } from '../../db/database';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
@@ -101,7 +102,6 @@ export function Progress() {
     setTourDeTaille(''); setHanches(''); setPoitrine(''); setNoteM(''); setModalMesure(false);
   };
 
-  // Données calories 7 derniers jours
   const donneesCalories = Array.from({ length: 7 }, (_, i) => {
     const d = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
     const cal = repas7j.filter((r) => r.date === d).reduce((s, r) => s + r.calories, 0);
@@ -121,8 +121,8 @@ export function Progress() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg text-sm">
-        <p className="font-medium text-gray-500">{formatDate(label)}</p>
+      <div className="bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg text-sm">
+        <p className="font-medium text-slate-500">{formatDate(label)}</p>
         {payload.map((p: any) => (
           <p key={p.name} style={{ color: p.color }} className="font-bold">
             {p.name === 'poids' ? 'Poids' : 'Tendance'} : {p.value} kg
@@ -137,8 +137,12 @@ export function Progress() {
       titre="Progression"
       actions={
         <div className="flex gap-2">
-          <Button taille="sm" variante="secondary" onClick={() => setModalMesure(true)}>📏</Button>
-          <Button taille="sm" onClick={() => setModalPesee(true)}>⚖️ Peser</Button>
+          <Button taille="sm" variante="secondary" onClick={() => setModalMesure(true)}>
+            <Ruler size={14} />
+          </Button>
+          <Button taille="sm" onClick={() => setModalPesee(true)}>
+            <Scale size={14} /> Peser
+          </Button>
         </div>
       }
     >
@@ -175,32 +179,35 @@ export function Progress() {
           </div>
         )}
         {resteAPerdre <= 0 && pesees.length > 0 && (
-          <p className="mt-4 text-center font-bold text-white text-lg">🏅 Objectif atteint !</p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <Trophy size={20} className="text-amber-300" />
+            <p className="font-bold text-white text-lg">Objectif atteint !</p>
+          </div>
         )}
       </Card>
 
       {/* Graphique calories 7 jours */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1">Calories — 7 derniers jours</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1">Calories — 7 derniers jours</h3>
         {objectifCal > 0 && (
-          <p className="text-xs text-gray-400 mb-3">Objectif : {objectifCal} kcal/j</p>
+          <p className="text-xs text-slate-400 mb-3">Objectif : {objectifCal} kcal/j</p>
         )}
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={donneesCalories} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}`} />
             <Tooltip
               formatter={(val) => [`${val ?? 0} kcal`, 'Calories']}
-              labelStyle={{ color: '#6b7280', fontSize: 12 }}
-              contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12 }}
+              labelStyle={{ color: '#64748b', fontSize: 12 }}
+              contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
             />
             {objectifCal > 0 && (
               <ReferenceLine
                 y={objectifCal}
-                stroke="#22c55e"
+                stroke="#16a34a"
                 strokeDasharray="5 3"
-                label={{ value: 'Obj.', position: 'right', fontSize: 10, fill: '#22c55e' }}
+                label={{ value: 'Obj.', position: 'right', fontSize: 10, fill: '#16a34a' }}
               />
             )}
             <Bar dataKey="calories" radius={[6, 6, 0, 0]} maxBarSize={36}>
@@ -209,7 +216,7 @@ export function Progress() {
                   key={i}
                   fill={
                     d.calories === 0
-                      ? '#e5e7eb'
+                      ? '#e2e8f0'
                       : objectifCal > 0 && d.calories > objectifCal
                       ? '#f87171'
                       : '#14b8a6'
@@ -219,17 +226,20 @@ export function Progress() {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <div className="flex gap-4 mt-2 justify-center text-xs text-gray-400">
+        <div className="flex gap-4 mt-2 justify-center text-xs text-slate-400">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" /> Sous l'objectif</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-400 inline-block" /> Dépassé</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block" /> Pas de données</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-200 inline-block" /> Pas de données</span>
         </div>
       </Card>
 
       {/* Mesures corporelles */}
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Mesures corporelles</h3>
+          <div className="flex items-center gap-2">
+            <Ruler size={14} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Mesures corporelles</h3>
+          </div>
           <button
             onClick={() => setModalMesure(true)}
             className="text-xs text-green-600 dark:text-green-400 font-semibold"
@@ -239,14 +249,14 @@ export function Progress() {
         </div>
 
         {!derniereMesure ? (
-          <div className="text-center py-4 text-gray-400">
-            <p className="text-2xl mb-1">📏</p>
+          <div className="flex flex-col items-center py-6 text-slate-400">
+            <Ruler size={32} className="mb-2 text-slate-200" strokeWidth={1.5} />
             <p className="text-sm">Aucune mesure enregistrée</p>
-            <p className="text-xs mt-1">Tour de taille, hanches, poitrine…</p>
+            <p className="text-xs mt-1 text-slate-300">Tour de taille, hanches, poitrine…</p>
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-slate-400">
               Dernière mesure : {format(new Date(derniereMesure.date), 'd MMMM yyyy', { locale: fr })}
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -255,21 +265,20 @@ export function Progress() {
                 { label: 'Hanches',        valeur: derniereMesure.hanches,      couleur: 'text-purple-600' },
                 { label: 'Poitrine',       valeur: derniereMesure.poitrine,     couleur: 'text-pink-600' },
               ].map((m) => (
-                <div key={m.label} className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-center">
+                <div key={m.label} className="bg-slate-50 dark:bg-gray-800 rounded-2xl p-3 text-center">
                   {m.valeur ? (
                     <>
                       <p className={`text-xl font-black ${m.couleur}`}>{m.valeur}</p>
-                      <p className="text-gray-400 text-[10px]">cm</p>
+                      <p className="text-slate-400 text-[10px]">cm</p>
                     </>
                   ) : (
-                    <p className="text-gray-300 text-xl">–</p>
+                    <p className="text-slate-300 text-xl">–</p>
                   )}
-                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">{m.label}</p>
+                  <p className="text-xs text-slate-400 mt-0.5 leading-tight">{m.label}</p>
                 </div>
               ))}
             </div>
 
-            {/* Évolution si au moins 2 mesures */}
             {mesures.length >= 2 && (() => {
               const avant = mesures[mesures.length - 2];
               const delta = (champ: keyof Mesure) => {
@@ -284,7 +293,7 @@ export function Progress() {
                 ) : null;
               };
               return (
-                <div className="flex gap-2 text-xs text-gray-400">
+                <div className="flex gap-2 text-xs text-slate-400">
                   {delta('tourDeTaille') && <span>Tour de taille : {delta('tourDeTaille')}</span>}
                   {delta('hanches') && <span>Hanches : {delta('hanches')}</span>}
                 </div>
@@ -294,24 +303,24 @@ export function Progress() {
         )}
       </Card>
 
-      {/* Graphique */}
+      {/* Courbe de poids */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4">Courbe de poids</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">Courbe de poids</h3>
         {donneesGraphique.length < 2 ? (
-          <div className="flex flex-col items-center py-8 text-gray-400">
-            <span className="text-4xl mb-2">⚖️</span>
+          <div className="flex flex-col items-center py-8 text-slate-400">
+            <Scale size={36} className="mb-2 text-slate-200" strokeWidth={1.5} />
             <p className="text-sm">Ajoutez au moins 2 pesées pour voir la courbe</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={donneesGraphique} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10 }} />
               <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}kg`} />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={poidsObjectif} stroke="#22c55e" strokeDasharray="6 3" label={{ value: 'Objectif', position: 'right', fontSize: 10, fill: '#22c55e' }} />
+              <ReferenceLine y={poidsObjectif} stroke="#16a34a" strokeDasharray="6 3" label={{ value: 'Objectif', position: 'right', fontSize: 10, fill: '#16a34a' }} />
               <Line type="monotone" dataKey="poids" stroke="#14b8a6" strokeWidth={2.5} dot={{ r: 4, fill: '#14b8a6' }} activeDot={{ r: 6 }} name="poids" />
-              <Line type="monotone" dataKey="tendance" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="tendance" />
+              <Line type="monotone" dataKey="tendance" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="tendance" />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -319,31 +328,31 @@ export function Progress() {
 
       {/* Historique pesées */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Historique pesées</h3>
+        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Historique pesées</h3>
         {pesees.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">Aucune pesée enregistrée</p>
+          <p className="text-sm text-slate-400 italic">Aucune pesée enregistrée</p>
         ) : (
           <div className="space-y-2">
             {[...pesees].reverse().slice(0, 10).map((p, i) => {
               const precedente = pesees[pesees.length - 1 - i - 1];
               const delta = precedente ? p.poids - precedente.poids : null;
               return (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-50 dark:border-gray-800 last:border-0">
                   <div>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                       {format(new Date(p.date), 'd MMMM yyyy', { locale: fr })}
                     </p>
-                    {p.note && <p className="text-xs text-gray-400">{p.note}</p>}
+                    {p.note && <p className="text-xs text-slate-400">{p.note}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {delta !== null && (
-                      <span className={`text-xs font-medium ${delta < 0 ? 'text-green-600' : delta > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                      <span className={`text-xs font-medium ${delta < 0 ? 'text-green-600' : delta > 0 ? 'text-red-500' : 'text-slate-400'}`}>
                         {delta > 0 ? '+' : ''}{delta.toFixed(1)} kg
                       </span>
                     )}
-                    <span className="text-lg font-black text-gray-900 dark:text-white">{p.poids} kg</span>
-                    <button onClick={() => setModalSuppression(p.id!)} className="p-1.5 rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-                      🗑️
+                    <span className="text-lg font-black text-slate-900 dark:text-white">{p.poids} kg</span>
+                    <button onClick={() => setModalSuppression(p.id!)} className="p-1.5 rounded-xl text-slate-300 hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -356,7 +365,7 @@ export function Progress() {
       {/* Modal pesée */}
       <Modal ouvert={modalPesee} onFermer={() => setModalPesee(false)} titre="Nouvelle pesée">
         <div className="space-y-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Pesez-vous le matin, à jeun et avant de boire, pour plus de cohérence.
           </p>
           <div>
@@ -368,7 +377,7 @@ export function Progress() {
             <input className="input" placeholder="Ex: Après une bonne nuit…" value={noteP} onChange={(e) => setNoteP(e.target.value)} />
           </div>
           <Button pleine taille="lg" onClick={ajouterPesee} disabled={!nouveauPoids}>
-            ✅ Enregistrer
+            <Check size={16} /> Enregistrer
           </Button>
         </div>
       </Modal>
@@ -376,7 +385,7 @@ export function Progress() {
       {/* Modal mesures */}
       <Modal ouvert={modalMesure} onFermer={() => setModalMesure(false)} titre="Mesures corporelles">
         <div className="space-y-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Mesurez-vous le matin, debout, à jeun. Remplissez au moins une valeur.
           </p>
           <div className="grid grid-cols-3 gap-3">
@@ -398,7 +407,7 @@ export function Progress() {
             <input className="input" placeholder="Ex: Après 3 semaines de sport" value={noteM} onChange={(e) => setNoteM(e.target.value)} />
           </div>
           <Button pleine taille="lg" onClick={ajouterMesure} disabled={!tourDeTaille && !hanches && !poitrine}>
-            ✅ Enregistrer
+            <Check size={16} /> Enregistrer
           </Button>
         </div>
       </Modal>

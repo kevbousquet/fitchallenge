@@ -3,6 +3,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import confetti from 'canvas-confetti';
+import {
+  Target, Footprints, Dumbbell, Droplets, Moon, Ban, Wine, Candy, Salad,
+  Camera, Pencil, Star, Plus, Check, Flame, Sunrise, Sun, Sunset, Apple,
+  ChevronRight, Trash2,
+} from 'lucide-react';
 import { db } from '../../db/database';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
@@ -17,12 +22,24 @@ import type { Repas, AnalyseRepas, ChallengeId, CategoriRepas, FavoriRepas } fro
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
 
-const CATS: { id: CategoriRepas; emoji: string; label: string }[] = [
-  { id: 'petit_dejeuner', emoji: '🌅', label: 'Matin' },
-  { id: 'dejeuner',       emoji: '☀️', label: 'Midi' },
-  { id: 'diner',          emoji: '🌙', label: 'Soir' },
-  { id: 'collation',      emoji: '🍎', label: 'Snack' },
+const CATS: { id: CategoriRepas; Icon: React.ComponentType<{ size?: number; className?: string }>; label: string; color: string }[] = [
+  { id: 'petit_dejeuner', Icon: Sunrise, label: 'Matin',  color: 'text-amber-500' },
+  { id: 'dejeuner',       Icon: Sun,     label: 'Midi',   color: 'text-orange-500' },
+  { id: 'diner',          Icon: Sunset,  label: 'Soir',   color: 'text-indigo-500' },
+  { id: 'collation',      Icon: Apple,   label: 'Snack',  color: 'text-green-600' },
 ];
+
+const CHALLENGE_ICONS: Record<ChallengeId, React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
+  deficit_calorique: Target,
+  pas:               Footprints,
+  sport:             Dumbbell,
+  hydratation:       Droplets,
+  sommeil:           Moon,
+  pas_de_grignotage: Ban,
+  pas_alcool:        Wine,
+  pas_sucre:         Candy,
+  legumes:           Salad,
+};
 
 function devinerCategorie(): CategoriRepas {
   const h = new Date().getHours();
@@ -34,7 +51,6 @@ function devinerCategorie(): CategoriRepas {
 
 export function Home() {
   const { user, journeeAujourdhui, mettreAJourJournee } = useStore();
-
   const userId = user?.id ?? 0;
 
   const repasAujourdhui = useLiveQuery(
@@ -55,24 +71,20 @@ export function Home() {
   const [typeSport, setTypeSport] = useState<'cardio' | 'musculation' | 'marche' | 'autre'>('cardio');
   const [dureeSport, setDureeSport] = useState('30');
 
+  const lancerConfettis = () =>
+    confetti({ particleCount: 60, spread: 70, origin: { y: 0.7 }, colors: ['#16a34a', '#0d9488', '#86efac'] });
+
   const validerSport = async () => {
     await mettreAJourJournee({ sportFait: true, typeSport, dureeSport: parseInt(dureeSport) });
     setModalSport(false);
     lancerConfettis();
   };
 
-  const lancerConfettis = () => {
-    confetti({ particleCount: 60, spread: 70, origin: { y: 0.7 }, colors: ['#22c55e', '#14b8a6', '#86efac'] });
-  };
-
   const basculeCheck = async (id: ChallengeId) => {
     if (!journeeAujourdhui) return;
     const map: Record<string, keyof typeof journeeAujourdhui> = {
-      sommeil:           'sommeilOk',
-      pas_de_grignotage: 'pasDeGrignotage',
-      pas_alcool:        'pasDAlcool',
-      pas_sucre:         'pasDeSucre',
-      legumes:           'legumesMange',
+      sommeil: 'sommeilOk', pas_de_grignotage: 'pasDeGrignotage',
+      pas_alcool: 'pasDAlcool', pas_sucre: 'pasDeSucre', legumes: 'legumesMange',
     };
     const champ = map[id];
     if (!champ) return;
@@ -107,6 +119,7 @@ export function Home() {
 
   const renderChallenge = (id: ChallengeId) => {
     const c = CHALLENGES[id];
+    const Icon = CHALLENGE_ICONS[id];
     if (!c || !journeeAujourdhui || !user) return null;
 
     let estCoche = false;
@@ -114,63 +127,64 @@ export function Home() {
 
     switch (id) {
       case 'deficit_calorique':
-        estCoche = caloriesConsommees <= objectifCal;
+        estCoche = caloriesConsommees <= objectifCal && caloriesConsommees > 0;
         contenu = (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-slate-400 tabular-nums">
             {caloriesConsommees} / {objectifCal} kcal
           </span>
         );
         break;
-
       case 'pas':
         estCoche = journeeAujourdhui.pas >= user.objectifPas;
         contenu = (
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-gray-400">
-              {journeeAujourdhui.pas.toLocaleString('fr')} / {user.objectifPas.toLocaleString('fr')} pas
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-slate-400 tabular-nums">
+              {journeeAujourdhui.pas.toLocaleString('fr')} / {user.objectifPas.toLocaleString('fr')}
             </span>
             <div className="flex items-center gap-1">
               <input
-                className="w-20 text-xs border rounded-lg px-2 py-0.5 dark:bg-gray-800 dark:border-gray-600"
-                type="number"
-                placeholder="saisir"
+                className="w-20 text-xs border border-slate-200 rounded-lg px-2 py-0.5 dark:bg-gray-800 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-green-500"
+                type="number" placeholder="saisir"
                 value={pasInput}
                 onChange={(e) => setPasInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && saisirPas()}
               />
-              <button onClick={saisirPas} className="text-xs text-green-600 font-bold">OK</button>
+              <button onClick={saisirPas} className="text-xs text-green-600 font-bold px-1">OK</button>
             </div>
           </div>
         );
         break;
-
       case 'sport':
         estCoche = journeeAujourdhui.sportFait;
         contenu = journeeAujourdhui.sportFait ? (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-slate-400 capitalize">
             {journeeAujourdhui.typeSport} · {journeeAujourdhui.dureeSport} min
           </span>
         ) : null;
         break;
-
       case 'hydratation':
         estCoche = journeeAujourdhui.verresBus >= user.objectifVerres;
         contenu = (
-          <div className="flex items-center gap-2 mt-1">
-            <div className="flex gap-1">
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex gap-0.5">
               {Array.from({ length: user.objectifVerres }).map((_, i) => (
-                <span key={i} className="text-base">
-                  {i < journeeAujourdhui.verresBus ? '💧' : '○'}
-                </span>
+                <div
+                  key={i}
+                  className={`w-3 h-3 rounded-sm transition-colors ${
+                    i < journeeAujourdhui.verresBus ? 'bg-teal-500' : 'bg-slate-200 dark:bg-gray-700'
+                  }`}
+                />
               ))}
             </div>
-            <button onClick={ajouterVerre} className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg">
+            <button
+              onClick={ajouterVerre}
+              className="text-xs bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 px-2 py-0.5 rounded-lg font-semibold"
+            >
               +1
             </button>
           </div>
         );
         break;
-
       case 'sommeil':        estCoche = journeeAujourdhui.sommeilOk;        break;
       case 'pas_de_grignotage': estCoche = journeeAujourdhui.pasDeGrignotage; break;
       case 'pas_alcool':    estCoche = journeeAujourdhui.pasDAlcool;        break;
@@ -184,114 +198,144 @@ export function Home() {
       <div
         key={id}
         onClick={clicable ? () => { if (id === 'sport') handleSport(); else basculeCheck(id); } : undefined}
-        className={`flex items-start gap-3 p-3 rounded-2xl transition-all ${clicable ? 'cursor-pointer active:scale-98' : ''} ${estCoche ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-800/50'}`}
+        className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+          clicable ? 'cursor-pointer active:scale-[0.98]' : ''
+        } ${estCoche ? 'bg-green-50 dark:bg-green-900/15' : 'bg-slate-50 dark:bg-gray-800/50'}`}
       >
-        <div className={`mt-0.5 w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${estCoche ? 'border-green-500 bg-green-500 text-white' : 'border-gray-300 dark:border-gray-600'}`}>
-          {estCoche && <span className="text-xs">✓</span>}
+        <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center transition-all ${
+          estCoche ? 'bg-green-600' : 'bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700'
+        }`}>
+          {estCoche
+            ? <Check size={15} className="text-white" strokeWidth={2.5} />
+            : <Icon size={15} className="text-slate-400" />
+          }
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span>{c.emoji}</span>
-            <span className={`text-sm font-semibold ${estCoche ? 'text-green-700 dark:text-green-300 line-through opacity-70' : 'text-gray-800 dark:text-gray-200'}`}>
-              {c.label}
-            </span>
-          </div>
+          <p className={`text-sm font-semibold leading-tight ${
+            estCoche ? 'text-green-700 dark:text-green-300' : 'text-slate-700 dark:text-gray-300'
+          }`}>
+            {c.label}
+          </p>
           {contenu}
         </div>
+        {clicable && !estCoche && (
+          <ChevronRight size={14} className="text-slate-300 flex-shrink-0" />
+        )}
       </div>
     );
   };
 
   return (
     <Layout
-      titre={`Bonjour ${user?.prenom ?? ''} 👋`}
-      actions={streak > 0 ? <span className="text-lg font-bold text-orange-500">🔥 {streak}</span> : null}
+      titre={`Bonjour ${user?.prenom ?? ''}`}
+      actions={
+        streak > 0 ? (
+          <div className="flex items-center gap-1 bg-orange-50 dark:bg-orange-900/20 px-2.5 py-1 rounded-lg">
+            <Flame size={14} className="text-orange-500" />
+            <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{streak}</span>
+          </div>
+        ) : null
+      }
     >
-      <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2 capitalize">
+      <p className="text-sm text-slate-400 dark:text-slate-500 -mt-1 capitalize font-medium">
         {format(new Date(), 'EEEE d MMMM', { locale: fr })}
       </p>
 
-      <Card className="flex flex-col items-center py-6">
+      {/* Jauge */}
+      <Card className="flex flex-col items-center py-6 gap-4">
         <CircularGauge valeur={caloriesConsommees} objectif={objectifCal} />
-        <Button className="mt-5" taille="lg" onClick={() => setModalRepas(true)}>
-          + Ajouter un repas
+        <Button taille="md" onClick={() => setModalRepas(true)} className="gap-2">
+          <Plus size={16} strokeWidth={2.5} />
+          Ajouter un repas
         </Button>
       </Card>
 
+      {/* Macros */}
       {repasAujourdhui.length > 0 && (
         <Card>
-          <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Macros du jour</h3>
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-3">Macros du jour</p>
+          <div className="grid grid-cols-3 gap-2">
             {[
-              { label: 'Protéines', valeur: repasAujourdhui.reduce((s, r) => s + (r.proteines ?? 0), 0), couleur: 'text-blue-600' },
-              { label: 'Glucides',  valeur: repasAujourdhui.reduce((s, r) => s + (r.glucides ?? 0), 0),  couleur: 'text-amber-600' },
-              { label: 'Lipides',   valeur: repasAujourdhui.reduce((s, r) => s + (r.lipides ?? 0), 0),   couleur: 'text-red-500' },
+              { label: 'Protéines', val: repasAujourdhui.reduce((s, r) => s + (r.proteines ?? 0), 0), color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+              { label: 'Glucides',  val: repasAujourdhui.reduce((s, r) => s + (r.glucides ?? 0), 0),  color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+              { label: 'Lipides',   val: repasAujourdhui.reduce((s, r) => s + (r.lipides ?? 0), 0),   color: 'text-red-500',   bg: 'bg-red-50 dark:bg-red-900/20' },
             ].map((m) => (
-              <div key={m.label} className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-3">
-                <p className={`text-xl font-bold ${m.couleur}`}>{Math.round(m.valeur)}g</p>
-                <p className="text-xs text-gray-400">{m.label}</p>
+              <div key={m.label} className={`${m.bg} rounded-xl p-3 text-center`}>
+                <p className={`text-xl font-black tabular-nums ${m.color}`}>{Math.round(m.val)}g</p>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">{m.label}</p>
               </div>
             ))}
           </div>
         </Card>
       )}
 
+      {/* Challenges */}
       <Card>
-        <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">Challenges du jour</h3>
+        <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-3">Challenges du jour</p>
         <div className="space-y-2">
           {user?.challengesActifs.map(renderChallenge)}
         </div>
         {journeeAujourdhui?.parfaite && (
-          <div className="mt-4 p-3 bg-gradient-to-r from-green-500 to-teal-500 rounded-2xl text-white text-center">
-            <p className="font-bold">🎉 Journée parfaite !</p>
-            <p className="text-sm text-green-100">Tous les challenges accomplis !</p>
+          <div className="mt-3 p-3 bg-gradient-to-r from-green-600 to-teal-600 rounded-xl text-white text-center">
+            <p className="font-bold text-sm">Journée parfaite</p>
+            <p className="text-xs text-green-100 mt-0.5">Tous les challenges accomplis</p>
           </div>
         )}
       </Card>
 
+      {/* Aperçu repas */}
       {repasAujourdhui.length > 0 && (
         <Card>
-          <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">
-            Repas aujourd'hui ({repasAujourdhui.length})
-          </h3>
+          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-3">
+            Repas du jour · {repasAujourdhui.length}
+          </p>
           <div className="space-y-2">
-            {repasAujourdhui.slice(-3).map((r) => (
-              <div key={r.id} className="flex items-center gap-3">
-                {r.photoBase64 ? (
-                  <img src={`data:image/jpeg;base64,${r.photoBase64}`} className="w-12 h-12 rounded-xl object-cover" alt={r.nom} />
-                ) : (
-                  <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">
-                    {CATS.find((c) => c.id === r.categorie)?.emoji ?? '🍽️'}
+            {repasAujourdhui.slice(-3).map((r) => {
+              const cat = CATS.find((c) => c.id === r.categorie);
+              return (
+                <div key={r.id} className="flex items-center gap-3">
+                  {r.photoBase64 ? (
+                    <img src={`data:image/jpeg;base64,${r.photoBase64}`} className="w-11 h-11 rounded-xl object-cover flex-shrink-0" alt={r.nom} />
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                      {cat ? <cat.Icon size={18} className={cat.color} /> : <Sun size={18} className="text-slate-400" />}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-gray-200 truncate">{r.nom}</p>
+                    <p className="text-xs text-slate-400 tabular-nums">{r.calories} kcal</p>
                   </div>
-                )}
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{r.nom}</p>
-                  <p className="text-xs text-gray-400">{r.calories} kcal</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
 
       <ModalAjoutRepas ouvert={modalRepas} onFermer={() => setModalRepas(false)} userId={userId} />
 
+      {/* Modal sport */}
       <Modal ouvert={modalSport} onFermer={() => setModalSport(false)} titre="Séance de sport">
         <div className="space-y-4">
           <div>
             <label className="label">Type de séance</label>
             <div className="grid grid-cols-2 gap-2">
-              {(['cardio', 'musculation', 'marche', 'autre'] as const).map((t) => (
+              {([
+                { id: 'cardio',      label: 'Cardio' },
+                { id: 'musculation', label: 'Muscu' },
+                { id: 'marche',      label: 'Marche' },
+                { id: 'autre',       label: 'Autre' },
+              ] as const).map((t) => (
                 <button
-                  key={t}
-                  onClick={() => setTypeSport(t)}
-                  className={`py-3 rounded-2xl border-2 font-medium capitalize transition-all ${
-                    typeSport === t
-                      ? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-                      : 'border-gray-200 dark:border-gray-700 text-gray-500'
+                  key={t.id}
+                  onClick={() => setTypeSport(t.id)}
+                  className={`py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                    typeSport === t.id
+                      ? 'border-green-600 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                      : 'border-slate-200 dark:border-gray-700 text-slate-500'
                   }`}
                 >
-                  {t === 'cardio' ? '🏃 Cardio' : t === 'musculation' ? '💪 Muscu' : t === 'marche' ? '🚶 Marche' : '⚡ Autre'}
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -300,14 +344,14 @@ export function Home() {
             <label className="label">Durée (minutes)</label>
             <input className="input" type="number" min="5" max="300" value={dureeSport} onChange={(e) => setDureeSport(e.target.value)} />
           </div>
-          <Button pleine taille="lg" onClick={validerSport}>✅ Valider la séance</Button>
+          <Button pleine taille="lg" onClick={validerSport}>Valider la séance</Button>
         </div>
       </Modal>
     </Layout>
   );
 }
 
-// ─── Modal d'ajout de repas ──────────────────────────────────────────────────
+// ─── Modal ajout repas ───────────────────────────────────────────────────────
 function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFermer: () => void; userId: number }) {
   const [onglet, setOnglet] = useState<'photo' | 'manuel' | 'favoris'>('photo');
   const [categorie, setCategorie] = useState<CategoriRepas>(devinerCategorie);
@@ -355,218 +399,167 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
     const repas: Repas = baseRepas
       ? { userId, date: TODAY, createdAt: TODAY, categorie, ...baseRepas } as Repas
       : analyse
-      ? {
-          userId, date: TODAY, createdAt: TODAY, categorie,
-          nom: analyse.description || 'Repas analysé',
-          calories: analyse.caloriesTotal,
-          proteines: analyse.proteinesTotal,
-          glucides: analyse.glucidesTotal,
-          lipides: analyse.lipidesTotal,
-          aliments: analyse.aliments,
-          photoBase64: photoBase64 ?? undefined,
-        }
-      : {
-          userId, date: TODAY, createdAt: TODAY, categorie,
-          nom: nomManuel,
-          calories: parseFloat(calManuel),
-          proteines: protManuel ? parseFloat(protManuel) : undefined,
-          glucides: glucManuel ? parseFloat(glucManuel) : undefined,
-          lipides: lipManuel ? parseFloat(lipManuel) : undefined,
-        };
+      ? { userId, date: TODAY, createdAt: TODAY, categorie, nom: analyse.description || 'Repas analysé', calories: analyse.caloriesTotal, proteines: analyse.proteinesTotal, glucides: analyse.glucidesTotal, lipides: analyse.lipidesTotal, aliments: analyse.aliments, photoBase64: photoBase64 ?? undefined }
+      : { userId, date: TODAY, createdAt: TODAY, categorie, nom: nomManuel, calories: parseFloat(calManuel), proteines: protManuel ? parseFloat(protManuel) : undefined, glucides: glucManuel ? parseFloat(glucManuel) : undefined, lipides: lipManuel ? parseFloat(lipManuel) : undefined };
 
     await db.repas.add(repas);
-
     if (sauverFavori && repas.nom) {
-      await db.favoris.add({
-        userId,
-        nom: repas.nom,
-        calories: repas.calories,
-        proteines: repas.proteines,
-        glucides: repas.glucides,
-        lipides: repas.lipides,
-        categorie: repas.categorie,
-      });
+      await db.favoris.add({ userId, nom: repas.nom, calories: repas.calories, proteines: repas.proteines, glucides: repas.glucides, lipides: repas.lipides, categorie: repas.categorie });
     }
-
     reinitialiser();
-  };
-
-  const supprimerFavori = async (id: number) => {
-    await db.favoris.delete(id);
   };
 
   const CategorieSelector = () => (
     <div>
-      <label className="label">Moment du repas</label>
-      <div className="grid grid-cols-4 gap-1.5">
+      <p className="label">Moment du repas</p>
+      <div className="grid grid-cols-4 gap-2">
         {CATS.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setCategorie(c.id)}
-            className={`py-2 rounded-xl text-xs font-medium flex flex-col items-center gap-0.5 transition-all ${
+          <button key={c.id} type="button" onClick={() => setCategorie(c.id)}
+            className={`py-2.5 rounded-xl flex flex-col items-center gap-1 text-xs font-semibold transition-all ${
               categorie === c.id
-                ? 'bg-green-500 text-white shadow-sm'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                ? 'bg-green-600 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-gray-800 text-slate-500'
             }`}
           >
-            <span className="text-base">{c.emoji}</span>
-            <span>{c.label}</span>
+            <c.Icon size={16} className={categorie === c.id ? 'text-white' : c.color} />
+            {c.label}
           </button>
         ))}
       </div>
     </div>
   );
 
+  const onglets = [
+    { id: 'photo' as const,   Icon: Camera, label: 'Photo' },
+    { id: 'manuel' as const,  Icon: Pencil, label: 'Manuel' },
+    { id: 'favoris' as const, Icon: Star,   label: 'Favoris' },
+  ];
+
   return (
     <Modal ouvert={ouvert} onFermer={reinitialiser} titre="Ajouter un repas" taille="lg">
-      {/* Onglets */}
-      <div className="flex gap-2 mb-5">
-        {([
-          { id: 'photo',   label: '📸 Photo' },
-          { id: 'manuel',  label: '✏️ Manuel' },
-          { id: 'favoris', label: '⭐ Favoris' },
-        ] as const).map((o) => (
-          <button
-            key={o.id}
-            onClick={() => { setOnglet(o.id); setAnalyse(null); setPhotoBase64(null); }}
-            className={`flex-1 py-2.5 rounded-2xl text-sm font-semibold transition-all ${
+      <div className="flex gap-1.5 mb-5 p-1 bg-slate-100 dark:bg-gray-800 rounded-xl">
+        {onglets.map((o) => (
+          <button key={o.id} onClick={() => { setOnglet(o.id); setAnalyse(null); setPhotoBase64(null); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${
               onglet === o.id
-                ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-md'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                ? 'bg-white dark:bg-gray-900 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500'
             }`}
           >
+            <o.Icon size={14} />
             {o.label}
           </button>
         ))}
       </div>
 
-      {/* ── Photo ── */}
+      {/* Photo */}
       {onglet === 'photo' && (
         <div className="space-y-4">
           <CategorieSelector />
-
           {!photoBase64 && !chargement && (
             <>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
-              <div
-                onClick={() => fileRef.current?.click()}
-                className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-green-400 transition-colors"
+              <button onClick={() => fileRef.current?.click()}
+                className="w-full h-36 rounded-xl border-2 border-dashed border-slate-200 dark:border-gray-700 flex flex-col items-center justify-center gap-2 hover:border-green-400 transition-colors"
               >
-                <span className="text-4xl">📸</span>
-                <p className="text-sm text-gray-500">Prendre ou choisir une photo</p>
-              </div>
+                <Camera size={28} className="text-slate-300" />
+                <p className="text-sm text-slate-400 font-medium">Prendre ou choisir une photo</p>
+              </button>
             </>
           )}
-
           {chargement && (
             <div className="flex flex-col items-center py-8 gap-3">
-              <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500">Claude analyse votre repas…</p>
+              <div className="w-10 h-10 border-3 border-green-600 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-slate-500">Analyse en cours…</p>
             </div>
           )}
-
-          {erreur && (
-            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl text-sm text-red-600 dark:text-red-400">
-              ❌ {erreur}
-            </div>
-          )}
-
+          {erreur && <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl text-sm text-red-600 dark:text-red-400">{erreur}</div>}
           {photoBase64 && analyse && !chargement && (
             <div className="space-y-3">
-              <img src={`data:image/jpeg;base64,${photoBase64}`} className="w-full h-40 object-cover rounded-2xl" alt="Repas analysé" />
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-3">
-                <p className="font-semibold text-gray-800 dark:text-gray-200 mb-2">{analyse.description}</p>
-                <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                  <div><p className="font-bold text-gray-900 dark:text-white">{analyse.caloriesTotal}</p><p className="text-gray-400">kcal</p></div>
-                  <div><p className="font-bold text-blue-600">{analyse.proteinesTotal}g</p><p className="text-gray-400">prot.</p></div>
-                  <div><p className="font-bold text-amber-600">{analyse.glucidesTotal}g</p><p className="text-gray-400">gluc.</p></div>
-                  <div><p className="font-bold text-red-500">{analyse.lipidesTotal}g</p><p className="text-gray-400">lip.</p></div>
+              <img src={`data:image/jpeg;base64,${photoBase64}`} className="w-full h-36 object-cover rounded-xl" alt="Repas" />
+              <div className="bg-slate-50 dark:bg-gray-800 rounded-xl p-3">
+                <p className="font-semibold text-slate-800 dark:text-gray-200 mb-2 text-sm">{analyse.description}</p>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div><p className="font-black text-slate-900 dark:text-white">{analyse.caloriesTotal}</p><p className="text-[10px] text-slate-400">kcal</p></div>
+                  <div><p className="font-black text-blue-600">{analyse.proteinesTotal}g</p><p className="text-[10px] text-slate-400">prot.</p></div>
+                  <div><p className="font-black text-amber-600">{analyse.glucidesTotal}g</p><p className="text-[10px] text-slate-400">gluc.</p></div>
+                  <div><p className="font-black text-red-500">{analyse.lipidesTotal}g</p><p className="text-[10px] text-slate-400">lip.</p></div>
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button variante="secondary" onClick={() => { setAnalyse(null); setPhotoBase64(null); }}>Réessayer</Button>
-                <Button pleine onClick={() => validerRepas()}>✅ Valider</Button>
+                <Button pleine onClick={() => validerRepas()}>Valider</Button>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Manuel ── */}
+      {/* Manuel */}
       {onglet === 'manuel' && (
         <div className="space-y-4">
           <CategorieSelector />
           <div>
             <label className="label">Nom du repas</label>
-            <input className="input" placeholder="Ex: Salade de quinoa" value={nomManuel} onChange={(e) => setNomManuel(e.target.value)} />
+            <input className="input" placeholder="Salade de quinoa" value={nomManuel} onChange={(e) => setNomManuel(e.target.value)} />
           </div>
           <div>
-            <label className="label">Calories (kcal) *</label>
+            <label className="label">Calories (kcal)</label>
             <input className="input" type="number" placeholder="450" value={calManuel} onChange={(e) => setCalManuel(e.target.value)} />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="label text-blue-600">Protéines (g)</label>
-              <input className="input" type="number" placeholder="30" value={protManuel} onChange={(e) => setProtManuel(e.target.value)} />
-            </div>
-            <div>
-              <label className="label text-amber-600">Glucides (g)</label>
-              <input className="input" type="number" placeholder="45" value={glucManuel} onChange={(e) => setGlucManuel(e.target.value)} />
-            </div>
-            <div>
-              <label className="label text-red-500">Lipides (g)</label>
-              <input className="input" type="number" placeholder="12" value={lipManuel} onChange={(e) => setLipManuel(e.target.value)} />
-            </div>
+            {[
+              { label: 'Protéines', color: 'text-blue-600',  val: protManuel, set: setProtManuel },
+              { label: 'Glucides',  color: 'text-amber-600', val: glucManuel, set: setGlucManuel },
+              { label: 'Lipides',   color: 'text-red-500',   val: lipManuel,  set: setLipManuel  },
+            ].map((m) => (
+              <div key={m.label}>
+                <label className={`label ${m.color}`}>{m.label} (g)</label>
+                <input className="input" type="number" value={m.val} onChange={(e) => m.set(e.target.value)} />
+              </div>
+            ))}
           </div>
-
           {nomManuel && calManuel && (
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sauverFavori}
-                onChange={(e) => setSauverFavori(e.target.checked)}
-                className="w-4 h-4 rounded accent-green-500"
-              />
-              <span className="text-sm text-gray-600 dark:text-gray-400">⭐ Sauvegarder comme favori</span>
+              <input type="checkbox" checked={sauverFavori} onChange={(e) => setSauverFavori(e.target.checked)} className="w-4 h-4 rounded accent-green-600" />
+              <span className="text-sm text-slate-500">Sauvegarder comme favori</span>
             </label>
           )}
-
           <Button pleine taille="lg" onClick={() => validerRepas()} disabled={!nomManuel || !calManuel}>
-            ✅ Ajouter ce repas
+            Ajouter ce repas
           </Button>
         </div>
       )}
 
-      {/* ── Favoris ── */}
+      {/* Favoris */}
       {onglet === 'favoris' && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {favoris.length === 0 ? (
-            <div className="flex flex-col items-center py-10 text-gray-400">
-              <span className="text-4xl mb-2">⭐</span>
+            <div className="flex flex-col items-center py-10 text-slate-400">
+              <Star size={32} className="mb-2 text-slate-200" />
               <p className="text-sm font-medium">Aucun favori enregistré</p>
-              <p className="text-xs mt-1 text-center">Ajoutez un repas manuellement et cochez "Sauvegarder comme favori"</p>
+              <p className="text-xs mt-1 text-center text-slate-300">Ajoutez un repas manuellement et cochez "Sauvegarder comme favori"</p>
             </div>
           ) : (
             <>
-              <p className="text-xs text-gray-400">Appuyez sur un favori pour l'ajouter directement</p>
-              <div className="space-y-2">
-                {favoris.map((fav) => (
-                  <div key={fav.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl">
-                    <span className="text-xl">{CATS.find((c) => c.id === fav.categorie)?.emoji ?? '🍽️'}</span>
-                    <div className="flex-1 min-w-0" onClick={() => validerRepas({ nom: fav.nom, calories: fav.calories, proteines: fav.proteines, glucides: fav.glucides, lipides: fav.lipides })}>
-                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{fav.nom}</p>
-                      <p className="text-xs text-gray-400">{fav.calories} kcal</p>
+              <p className="text-xs text-slate-400 mb-3">Appuyez pour ajouter directement</p>
+              {favoris.map((fav) => {
+                const cat = CATS.find((c) => c.id === fav.categorie);
+                return (
+                  <div key={fav.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-gray-800 rounded-xl">
+                    <div className="w-9 h-9 rounded-lg bg-white dark:bg-gray-700 flex items-center justify-center flex-shrink-0 border border-slate-100 dark:border-gray-600">
+                      {cat ? <cat.Icon size={16} className={cat.color} /> : <Sun size={16} className="text-slate-400" />}
                     </div>
-                    <button
-                      onClick={() => supprimerFavori(fav.id!)}
-                      className="p-1.5 text-gray-300 hover:text-red-400 rounded-lg"
-                    >
-                      🗑️
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => validerRepas({ nom: fav.nom, calories: fav.calories, proteines: fav.proteines, glucides: fav.glucides, lipides: fav.lipides })}>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-gray-200 truncate">{fav.nom}</p>
+                      <p className="text-xs text-slate-400 tabular-nums">{fav.calories} kcal</p>
+                    </div>
+                    <button onClick={() => db.favoris.delete(fav.id!)} className="p-1.5 text-slate-300 hover:text-red-400 rounded-lg">
+                      <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </>
           )}
         </div>

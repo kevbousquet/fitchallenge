@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react';
 import { clsx } from 'clsx';
+import { X } from 'lucide-react';
 
 interface Props {
   ouvert: boolean;
@@ -28,7 +29,7 @@ export function Modal({ ouvert, onFermer, titre, children, taille = 'md' }: Prop
       {/* Contenu du modal */}
       <div
         className={clsx(
-          'relative w-full bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl shadow-2xl animate-fade-in overflow-y-auto max-h-[90vh]',
+          'relative w-full bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl animate-fade-in overflow-y-auto max-h-[90vh]',
           {
             'sm:max-w-sm':  taille === 'sm',
             'sm:max-w-md':  taille === 'md',
@@ -36,19 +37,18 @@ export function Modal({ ouvert, onFermer, titre, children, taille = 'md' }: Prop
           },
         )}
       >
-        {/* Barre de tirage (mobile) */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+          <div className="w-8 h-1 bg-slate-200 dark:bg-gray-700 rounded-full" />
         </div>
         {titre && (
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">{titre}</h2>
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-gray-800">
+            <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">{titre}</h2>
             <button
               onClick={onFermer}
-              className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-gray-800 text-slate-400"
               aria-label="Fermer"
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
         )}
