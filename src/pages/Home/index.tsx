@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -6,7 +6,7 @@ import confetti from 'canvas-confetti';
 import {
   Target, Footprints, Dumbbell, Droplets, Moon, Ban, Wine, Candy, Salad,
   Camera, Pencil, Star, Plus, Check, Flame, Sunrise, Sun, Sunset, Apple,
-  ChevronRight, Trash2, ScanLine, RefreshCw,
+  ChevronRight, Trash2, ScanLine, RefreshCw, Search, X,
 } from 'lucide-react';
 import { db } from '../../db/database';
 import { useStore } from '../../store/useStore';
@@ -21,6 +21,8 @@ import { useStepCounter } from '../../hooks/useStepCounter';
 import { analyserRepasParPhoto, fileToBase64 } from '../../services/claudeApi';
 import { rechercherParCode } from '../../services/openFoodFacts';
 import type { ProduitOFF } from '../../services/openFoodFacts';
+import { INGREDIENTS, CATEGORIE_LABELS, CATEGORIE_COLORS } from '../../data/ingredients';
+import type { Ingredient } from '../../data/ingredients';
 import { calculerCaloriesBrulees } from '../../utils/caloriesBrulees';
 import { isConnecte, recupererPasAujourdhui } from '../../services/googleFit';
 import type { Repas, AnalyseRepas, ChallengeId, CategoriRepas, FavoriRepas } from '../../types';
@@ -489,6 +491,57 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
   const [erreur, setErreur] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Ingredient composer state (Manuel tab)
+  const [rechercheIng, setRechercheIng] = useState('');
+  const [dropdownOuvert, setDropdownOuvert] = useState(false);
+  const [composition, setComposition] = useState<{ ing: Ingredient; poids: string }[]>([]);
+
+  const suggestions = useMemo(() =>
+    rechercheIng.length >= 2
+      ? INGREDIENTS.filter((ing) =>
+          ing.nom.toLowerCase().includes(rechercheIng.toLowerCase())
+        ).slice(0, 7)
+      : [],
+    [rechercheIng],
+  );
+
+  const totaux = useMemo(() =>
+    composition.reduce(
+      (acc, item) => {
+        const r = parseFloat(item.poids) / 100;
+        if (!isNaN(r) && r > 0) {
+          acc.calories  += Math.round(item.ing.calories100g * r);
+          acc.proteines += item.ing.proteines100g * r;
+          acc.glucides  += item.ing.glucides100g  * r;
+          acc.lipides   += item.ing.lipides100g   * r;
+        }
+        return acc;
+      },
+      { calories: 0, proteines: 0, glucides: 0, lipides: 0 },
+    ),
+    [composition],
+  );
+
+  // Sync composition → form fields
+  useEffect(() => {
+    if (composition.length === 0) return;
+    setNomManuel(composition.map((i) => i.ing.nom).join(' + '));
+    setCalManuel(String(totaux.calories));
+    setProtManuel(String(Math.round(totaux.proteines * 10) / 10));
+    setGlucManuel(String(Math.round(totaux.glucides  * 10) / 10));
+    setLipManuel (String(Math.round(totaux.lipides   * 10) / 10));
+  }, [totaux, composition]);
+
+  const ajouterIngredient = (ing: Ingredient) => {
+    setComposition((prev) => [...prev, { ing, poids: '100' }]);
+    setRechercheIng('');
+    setDropdownOuvert(false);
+  };
+  const mettreAJourPoids = (i: number, poids: string) =>
+    setComposition((prev) => prev.map((item, idx) => idx === i ? { ...item, poids } : item));
+  const retirerIngredient = (i: number) =>
+    setComposition((prev) => prev.filter((_, idx) => idx !== i));
+
   // Scanner state
   const [produitOFF, setProduitOFF] = useState<ProduitOFF | null>(null);
   const [quantiteOFF, setQuantiteOFF] = useState('100');
@@ -567,6 +620,7 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
     setAnalyse(null); setPhotoBase64(null);
     setNomManuel(''); setCalManuel(''); setProtManuel(''); setGlucManuel(''); setLipManuel('');
     setErreur(null); setSauverFavori(false);
+    setRechercheIng(''); setComposition([]); setDropdownOuvert(false);
     onFermer();
   };
 
@@ -691,33 +745,139 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
       {onglet === 'manuel' && (
         <div className="space-y-4">
           <CategorieSelector />
+
+          {/* ── Bibliothèque d'ingrédients ── */}
+          <div>
+            <p className="label">Composer depuis la bibliothèque</p>
+            <div className="relative">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  className="input pl-8"
+                  placeholder="Merguez, saumon, riz cuit…"
+                  value={rechercheIng}
+                  onChange={(e) => { setRechercheIng(e.target.value); setDropdownOuvert(true); }}
+                  onFocus={() => rechercheIng.length >= 2 && setDropdownOuvert(true)}
+                  onBlur={() => setTimeout(() => setDropdownOuvert(false), 150)}
+                />
+              </div>
+              {dropdownOuvert && suggestions.length > 0 && (
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-slate-100 dark:border-gray-700 overflow-hidden">
+                  {suggestions.map((ing) => (
+                    <button
+                      key={ing.nom}
+                      type="button"
+                      onMouseDown={() => ajouterIngredient(ing)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-gray-800 text-left border-b border-slate-50 dark:border-gray-800 last:border-0"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${CATEGORIE_COLORS[ing.categorie]}`} />
+                        <span className="text-sm text-slate-800 dark:text-gray-200 font-medium truncate">{ing.nom}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0">{CATEGORIE_LABELS[ing.categorie]}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-400 tabular-nums shrink-0 ml-2">{ing.calories100g} kcal/100g</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Liste d'ingrédients composés */}
+          {composition.length > 0 && (
+            <div className="space-y-2">
+              {composition.map((item, i) => {
+                const kcalItem = Math.round(item.ing.calories100g * (parseFloat(item.poids) || 0) / 100);
+                return (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-gray-800 rounded-xl">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${CATEGORIE_COLORS[item.ing.categorie]}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-gray-200 truncate">{item.ing.nom}</p>
+                      <p className="text-[10px] text-slate-400">{kcalItem} kcal{item.ing.note ? ` · ${item.ing.note}` : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.poids}
+                        onChange={(e) => mettreAJourPoids(i, e.target.value)}
+                        className="w-14 text-sm text-center border border-slate-200 dark:border-gray-600 rounded-lg px-1 py-1 dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-green-500 font-bold tabular-nums"
+                      />
+                      <span className="text-xs text-slate-400">g</span>
+                      <button
+                        onClick={() => retirerIngredient(i)}
+                        className="p-1 text-slate-300 hover:text-red-400 rounded-lg ml-0.5"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Totaux */}
+              <div className="grid grid-cols-4 gap-2 text-center bg-green-50 dark:bg-green-900/20 rounded-xl p-3">
+                <div>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{totaux.calories}</p>
+                  <p className="text-[10px] text-slate-400">kcal</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-blue-600 tabular-nums">{Math.round(totaux.proteines * 10) / 10}g</p>
+                  <p className="text-[10px] text-slate-400">prot.</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-amber-600 tabular-nums">{Math.round(totaux.glucides * 10) / 10}g</p>
+                  <p className="text-[10px] text-slate-400">gluc.</p>
+                </div>
+                <div>
+                  <p className="text-lg font-black text-red-500 tabular-nums">{Math.round(totaux.lipides * 10) / 10}g</p>
+                  <p className="text-[10px] text-slate-400">lip.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Champs finaux (auto-remplis ou manuels) ── */}
+          <div className="h-px bg-slate-100 dark:bg-gray-800" />
           <div>
             <label className="label">Nom du repas</label>
-            <input className="input" placeholder="Salade de quinoa" value={nomManuel} onChange={(e) => setNomManuel(e.target.value)} />
+            <input
+              className="input"
+              placeholder={composition.length > 0 ? '' : 'Salade de quinoa…'}
+              value={nomManuel}
+              onChange={(e) => setNomManuel(e.target.value)}
+            />
           </div>
-          <div>
-            <label className="label">Calories (kcal)</label>
-            <input className="input" type="number" placeholder="450" value={calManuel} onChange={(e) => setCalManuel(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: 'Protéines', color: 'text-blue-600',  val: protManuel, set: setProtManuel },
-              { label: 'Glucides',  color: 'text-amber-600', val: glucManuel, set: setGlucManuel },
-              { label: 'Lipides',   color: 'text-red-500',   val: lipManuel,  set: setLipManuel  },
-            ].map((m) => (
-              <div key={m.label}>
-                <label className={`label ${m.color}`}>{m.label} (g)</label>
-                <input className="input" type="number" value={m.val} onChange={(e) => m.set(e.target.value)} />
+
+          {/* Affiche les champs kcal/macros uniquement en saisie libre (pas d'ingrédients) */}
+          {composition.length === 0 && (
+            <>
+              <div>
+                <label className="label">Calories (kcal)</label>
+                <input className="input" type="number" placeholder="450" value={calManuel} onChange={(e) => setCalManuel(e.target.value)} />
               </div>
-            ))}
-          </div>
-          {nomManuel && calManuel && (
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Protéines', color: 'text-blue-600',  val: protManuel, set: setProtManuel },
+                  { label: 'Glucides',  color: 'text-amber-600', val: glucManuel, set: setGlucManuel },
+                  { label: 'Lipides',   color: 'text-red-500',   val: lipManuel,  set: setLipManuel  },
+                ].map((m) => (
+                  <div key={m.label}>
+                    <label className={`label ${m.color}`}>{m.label} (g)</label>
+                    <input className="input" type="number" value={m.val} onChange={(e) => m.set(e.target.value)} />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {nomManuel && (calManuel || composition.length > 0) && (
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={sauverFavori} onChange={(e) => setSauverFavori(e.target.checked)} className="w-4 h-4 rounded accent-green-600" />
               <span className="text-sm text-slate-500">Sauvegarder comme favori</span>
             </label>
           )}
-          <Button pleine taille="lg" onClick={() => validerRepas()} disabled={!nomManuel || !calManuel}>
+          <Button pleine taille="lg" onClick={() => validerRepas()} disabled={!nomManuel || (!calManuel && composition.length === 0)}>
             Ajouter ce repas
           </Button>
         </div>
