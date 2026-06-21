@@ -6,7 +6,7 @@ import confetti from 'canvas-confetti';
 import {
   Target, Footprints, Dumbbell, Droplets, Moon, Ban, Wine, Candy, Salad,
   Camera, Pencil, Star, Plus, Check, Flame, Sunrise, Sun, Sunset, Apple,
-  ChevronRight, Trash2,
+  ChevronRight, Trash2, ScanLine, RefreshCw,
 } from 'lucide-react';
 import { db } from '../../db/database';
 import { useStore } from '../../store/useStore';
@@ -19,6 +19,10 @@ import { CHALLENGES } from '../../utils/challenges';
 import { calculerStreak } from '../../utils/streak';
 import { useStepCounter } from '../../hooks/useStepCounter';
 import { analyserRepasParPhoto, fileToBase64 } from '../../services/claudeApi';
+import { rechercherParCode } from '../../services/openFoodFacts';
+import type { ProduitOFF } from '../../services/openFoodFacts';
+import { calculerCaloriesBrulees } from '../../utils/caloriesBrulees';
+import { isConnecte, recupererPasAujourdhui } from '../../services/googleFit';
 import type { Repas, AnalyseRepas, ChallengeId, CategoriRepas, FavoriRepas } from '../../types';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -66,6 +70,7 @@ export function Home() {
   const streak = calculerStreak(toutesJournees);
   const caloriesConsommees = repasAujourdhui.reduce((s, r) => s + r.calories, 0);
   const objectifCal = user?.objectifCalories ?? 1800;
+  const depenseCaloriques = calculerCaloriesBrulees(journeeAujourdhui ?? null, user);
 
   const [modalRepas, setModalRepas] = useState(false);
   const [modalSport, setModalSport] = useState(false);
@@ -160,6 +165,18 @@ export function Home() {
     setNouveauPas(0);
   };
 
+  // Google Fit sync
+  const [gfitSync, setGfitSync] = useState(false);
+  const syncDepuisGoogleFit = async () => {
+    setGfitSync(true);
+    const pas = await recupererPasAujourdhui();
+    setGfitSync(false);
+    if (pas !== null) {
+      await mettreAJourJournee({ pas });
+      if (pas >= (user?.objectifPas ?? 8000)) lancerConfettis();
+    }
+  };
+
   const renderChallenge = (id: ChallengeId) => {
     const c = CHALLENGES[id];
     const Icon = CHALLENGE_ICONS[id];
@@ -214,6 +231,19 @@ export function Home() {
                     />
                     <button onClick={saisirPas} className="text-xs text-green-600 font-bold px-1">OK</button>
                   </div>
+                  {isConnecte() && (
+                    <button
+                      onClick={syncDepuisGoogleFit}
+                      disabled={gfitSync}
+                      className="text-xs bg-slate-50 dark:bg-gray-800 text-slate-500 dark:text-slate-400 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 border border-slate-200 dark:border-gray-700 disabled:opacity-50"
+                    >
+                      {gfitSync
+                        ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin inline-block" />
+                        : <RefreshCw size={11} />
+                      }
+                      Google Fit
+                    </button>
+                  )}
                 </>
               ) : (
                 <button
@@ -318,9 +348,24 @@ export function Home() {
         {format(new Date(), 'EEEE d MMMM', { locale: fr })}
       </p>
 
-      {/* Jauge */}
+      {/* Jauge + calories brûlées */}
       <Card className="flex flex-col items-center py-6 gap-4">
         <CircularGauge valeur={caloriesConsommees} objectif={objectifCal} />
+        {depenseCaloriques.total > 0 && (
+          <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <Flame size={12} className="text-orange-400" />
+              <span className="font-semibold text-orange-500">{depenseCaloriques.total} kcal brûlées</span>
+            </span>
+            <span className="text-slate-200 dark:text-gray-700">·</span>
+            <span className="text-slate-400">
+              Bilan :
+              <span className={`font-semibold ml-1 ${(caloriesConsommees - depenseCaloriques.total) <= 0 ? 'text-green-600 dark:text-green-400' : 'text-amber-500'}`}>
+                {caloriesConsommees - depenseCaloriques.total >= 0 ? '+' : ''}{caloriesConsommees - depenseCaloriques.total} kcal
+              </span>
+            </span>
+          </div>
+        )}
         <Button taille="md" onClick={() => setModalRepas(true)} className="gap-2">
           <Plus size={16} strokeWidth={2.5} />
           Ajouter un repas
@@ -430,7 +475,7 @@ export function Home() {
 
 // ─── Modal ajout repas ───────────────────────────────────────────────────────
 function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFermer: () => void; userId: number }) {
-  const [onglet, setOnglet] = useState<'photo' | 'manuel' | 'favoris'>('photo');
+  const [onglet, setOnglet] = useState<'photo' | 'manuel' | 'favoris' | 'scanner'>('photo');
   const [categorie, setCategorie] = useState<CategoriRepas>(devinerCategorie);
   const [nomManuel, setNomManuel] = useState('');
   const [calManuel, setCalManuel] = useState('');
@@ -444,12 +489,81 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
   const [erreur, setErreur] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Scanner state
+  const [produitOFF, setProduitOFF] = useState<ProduitOFF | null>(null);
+  const [quantiteOFF, setQuantiteOFF] = useState('100');
+  const [scanErreur, setScanErreur] = useState<string | null>(null);
+  const [scanChargement, setScanChargement] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+
   const favoris = useLiveQuery(
     () => userId ? db.favoris.where('userId').equals(userId).toArray() : Promise.resolve([] as FavoriRepas[]),
     [userId],
   ) ?? [];
 
+  // Scanner lifecycle: start when tab is active, stop otherwise
+  useEffect(() => {
+    if (onglet !== 'scanner' || !ouvert || produitOFF || scanChargement) return;
+
+    let stopped = false;
+
+    (async () => {
+      setScanErreur(null);
+      try {
+        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        const reader = new BrowserMultiFormatReader();
+
+        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+        const backCamera = devices.find((d: MediaDeviceInfo) => /back|rear|environment/i.test(d.label));
+        const deviceId = backCamera?.deviceId ?? devices[0]?.deviceId ?? null;
+
+        if (stopped || !videoRef.current) return;
+
+        const controls = await reader.decodeFromVideoDevice(deviceId, videoRef.current, async (result: any) => {
+          if (!result || stopped) return;
+          stopped = true;
+          try { controls?.stop(); } catch {}
+          controlsRef.current = null;
+
+          setScanChargement(true);
+          const code = result.getText();
+          const produit = await rechercherParCode(code);
+          setScanChargement(false);
+
+          if (produit) {
+            setProduitOFF(produit);
+            setQuantiteOFF('100');
+          } else {
+            setScanErreur(`Produit non trouvé (code : ${code})`);
+          }
+        });
+
+        if (stopped) {
+          try { controls?.stop(); } catch {}
+        } else {
+          controlsRef.current = controls;
+        }
+      } catch {
+        if (!stopped) setScanErreur("Impossible d'accéder à la caméra");
+      }
+    })();
+
+    return () => {
+      stopped = true;
+      if (controlsRef.current) {
+        try { controlsRef.current.stop(); } catch {}
+        controlsRef.current = null;
+      }
+    };
+  }, [onglet, ouvert, produitOFF, scanChargement]);
+
   const reinitialiser = () => {
+    if (controlsRef.current) {
+      try { controlsRef.current.stop(); } catch {}
+      controlsRef.current = null;
+    }
+    setProduitOFF(null); setScanErreur(null); setScanChargement(false);
     setAnalyse(null); setPhotoBase64(null);
     setNomManuel(''); setCalManuel(''); setProtManuel(''); setGlucManuel(''); setLipManuel('');
     setErreur(null); setSauverFavori(false);
@@ -507,23 +621,24 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
   );
 
   const onglets = [
-    { id: 'photo' as const,   Icon: Camera, label: 'Photo' },
-    { id: 'manuel' as const,  Icon: Pencil, label: 'Manuel' },
-    { id: 'favoris' as const, Icon: Star,   label: 'Favoris' },
+    { id: 'photo' as const,   Icon: Camera,   label: 'Photo' },
+    { id: 'manuel' as const,  Icon: Pencil,   label: 'Manuel' },
+    { id: 'favoris' as const, Icon: Star,     label: 'Favoris' },
+    { id: 'scanner' as const, Icon: ScanLine, label: 'Scanner' },
   ];
 
   return (
     <Modal ouvert={ouvert} onFermer={reinitialiser} titre="Ajouter un repas" taille="lg">
-      <div className="flex gap-1.5 mb-5 p-1 bg-slate-100 dark:bg-gray-800 rounded-xl">
+      <div className="flex gap-1 mb-5 p-1 bg-slate-100 dark:bg-gray-800 rounded-xl">
         {onglets.map((o) => (
-          <button key={o.id} onClick={() => { setOnglet(o.id); setAnalyse(null); setPhotoBase64(null); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${
+          <button key={o.id} onClick={() => { setOnglet(o.id); setAnalyse(null); setPhotoBase64(null); setProduitOFF(null); setScanErreur(null); }}
+            className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all ${
               onglet === o.id
                 ? 'bg-white dark:bg-gray-900 text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-500'
             }`}
           >
-            <o.Icon size={14} />
+            <o.Icon size={13} />
             {o.label}
           </button>
         ))}
@@ -638,6 +753,121 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
                 );
               })}
             </>
+          )}
+        </div>
+      )}
+
+      {/* Scanner codes-barres */}
+      {onglet === 'scanner' && (
+        <div className="space-y-4">
+          <CategorieSelector />
+
+          {!produitOFF && !scanChargement && (
+            <div className="relative overflow-hidden rounded-xl bg-black aspect-square">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                muted
+                playsInline
+              />
+              {/* Viseur */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="relative w-48 h-32">
+                  <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg" />
+                  <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg" />
+                  <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg" />
+                  <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg" />
+                  <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-green-400/60 -translate-y-1/2" />
+                </div>
+              </div>
+              <p className="absolute bottom-3 left-0 right-0 text-center text-white/70 text-xs font-medium">
+                Pointez vers un code-barres
+              </p>
+            </div>
+          )}
+
+          {scanErreur && !produitOFF && (
+            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl text-sm text-red-600 dark:text-red-400 flex items-center justify-between gap-2">
+              <span>{scanErreur}</span>
+              <button
+                onClick={() => setScanErreur(null)}
+                className="text-xs underline shrink-0"
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
+
+          {scanChargement && (
+            <div className="flex flex-col items-center py-8 gap-3">
+              <div className="w-10 h-10 border-[3px] border-green-600 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-slate-500">Recherche du produit…</p>
+            </div>
+          )}
+
+          {produitOFF && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 flex gap-3 items-start">
+                {produitOFF.image && (
+                  <img
+                    src={produitOFF.image}
+                    className="w-16 h-16 rounded-lg object-contain bg-white flex-shrink-0 border border-slate-100 dark:border-gray-700"
+                    alt={produitOFF.nom}
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-800 dark:text-gray-200 text-sm leading-tight">{produitOFF.nom}</p>
+                  {produitOFF.marque && <p className="text-xs text-slate-400 mt-0.5">{produitOFF.marque}</p>}
+                  <div className="grid grid-cols-4 gap-1 mt-2 text-center">
+                    <div><p className="font-black text-slate-900 dark:text-white text-sm">{produitOFF.calories100g}</p><p className="text-[9px] text-slate-400">kcal/100g</p></div>
+                    <div><p className="font-black text-blue-600 text-sm">{produitOFF.proteines100g}g</p><p className="text-[9px] text-slate-400">prot.</p></div>
+                    <div><p className="font-black text-amber-600 text-sm">{produitOFF.glucides100g}g</p><p className="text-[9px] text-slate-400">gluc.</p></div>
+                    <div><p className="font-black text-red-500 text-sm">{produitOFF.lipides100g}g</p><p className="text-[9px] text-slate-400">lip.</p></div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Quantité consommée (g)</label>
+                <input
+                  className="input text-xl font-bold text-center"
+                  type="number"
+                  min="1"
+                  max="5000"
+                  value={quantiteOFF}
+                  onChange={(e) => setQuantiteOFF(e.target.value)}
+                />
+              </div>
+
+              {quantiteOFF && parseFloat(quantiteOFF) > 0 && (
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-black text-green-700 dark:text-green-300">
+                    {Math.round(produitOFF.calories100g * parseFloat(quantiteOFF) / 100)} kcal
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">pour {quantiteOFF} g</p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button variante="secondary" onClick={() => { setProduitOFF(null); setScanErreur(null); }}>
+                  Rescanner
+                </Button>
+                <Button pleine onClick={() => {
+                  const qte = parseFloat(quantiteOFF);
+                  if (!qte || qte <= 0) return;
+                  const ratio = qte / 100;
+                  validerRepas({
+                    nom: produitOFF!.nom + (produitOFF!.marque ? ` (${produitOFF!.marque})` : ''),
+                    calories: Math.round(produitOFF!.calories100g * ratio),
+                    proteines: Math.round(produitOFF!.proteines100g * ratio * 10) / 10,
+                    glucides: Math.round(produitOFF!.glucides100g * ratio * 10) / 10,
+                    lipides: Math.round(produitOFF!.lipides100g * ratio * 10) / 10,
+                  });
+                }}>
+                  Ajouter
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       )}

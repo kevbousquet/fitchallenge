@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Footprints, Droplets, Bell, BellOff, UtensilsCrossed, Scale, Moon, Sun,
   Check, Save, User, Upload, Trash2, Target, Dumbbell, Ban, Wine, Candy,
-  Leaf, ChevronRight,
+  Leaf, ChevronRight, Activity,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
@@ -12,6 +12,12 @@ import { Button } from '../../components/ui/Button';
 import { TOUS_LES_CHALLENGES } from '../../utils/challenges';
 import { calculerObjectifCalories } from '../../utils/bmr';
 import { db } from '../../db/database';
+import {
+  getClientId, setClientId,
+  isConnecte as gfitConnecteCheck,
+  connecter as connecterGfit,
+  deconnecter as deconnecterGfit,
+} from '../../services/googleFit';
 import type { ChallengeId } from '../../types';
 
 type IconComp = React.ComponentType<{ size?: number; className?: string }>;
@@ -50,6 +56,25 @@ export function Settings() {
   const [permissionNotif, setPermissionNotif]   = useState<NotificationPermission>('default');
 
   const [messageSauvegarde, setMessageSauvegarde] = useState(false);
+
+  // Google Fit
+  const [gfitClientId, setGfitClientId] = useState(getClientId());
+  const [gfitConnecte, setGfitConnecte] = useState(gfitConnecteCheck());
+  const [gfitConnexionEnCours, setGfitConnexionEnCours] = useState(false);
+
+  const connecterGoogleFit = async () => {
+    if (!gfitClientId) return;
+    setClientId(gfitClientId);
+    setGfitConnexionEnCours(true);
+    const ok = await connecterGfit(gfitClientId);
+    setGfitConnexionEnCours(false);
+    setGfitConnecte(ok);
+  };
+
+  const deconnecterGoogleFit = () => {
+    deconnecterGfit();
+    setGfitConnecte(false);
+  };
 
   useEffect(() => {
     if ('Notification' in window) setPermissionNotif(Notification.permission);
@@ -289,6 +314,47 @@ export function Settings() {
             <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${themeSombre ? 'left-6' : 'left-0.5'}`} />
           </div>
         </button>
+      </Card>
+
+      {/* Google Fit */}
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <Activity size={16} className="text-green-600" />
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Google Fit</h3>
+        </div>
+        {gfitConnecte ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 rounded-xl p-3">
+              <Check size={14} className="text-green-600" />
+              <span className="text-sm text-green-700 dark:text-green-300 font-medium">Connecté à Google Fit</span>
+            </div>
+            <p className="text-xs text-slate-400">Votre nombre de pas peut être importé depuis Google Fit sur l'accueil.</p>
+            <Button variante="secondary" pleine onClick={deconnecterGoogleFit}>
+              Se déconnecter
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-400">
+              Importez automatiquement votre nombre de pas depuis Google Fit. Vous aurez besoin d'un Client ID OAuth créé dans Google Cloud Console.
+            </p>
+            <div>
+              <label className="label">Client ID Google OAuth</label>
+              <input
+                className="input text-xs"
+                placeholder="xxxx.apps.googleusercontent.com"
+                value={gfitClientId}
+                onChange={(e) => setGfitClientId(e.target.value)}
+              />
+              <p className="text-[10px] text-slate-300 dark:text-slate-600 mt-1">
+                console.cloud.google.com → API et services → Identifiants → OAuth 2.0
+              </p>
+            </div>
+            <Button pleine onClick={connecterGoogleFit} disabled={!gfitClientId || gfitConnexionEnCours}>
+              {gfitConnexionEnCours ? 'Connexion en cours…' : 'Se connecter'}
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* Sauvegarder */}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -13,7 +13,10 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { estimerDateObjectif } from '../../utils/bmr';
-import type { Pesee, Mesure } from '../../types';
+import { calculerIMC, getCategorieIMC, poidsIdeal } from '../../utils/bmi';
+import type { Pesee, Mesure, Repas } from '../../types';
+
+type PlageDates = '7j' | '30j' | '90j' | 'tout';
 
 function moyenneMobile(donnees: { date: string; poids: number }[], n: number) {
   return donnees.map((d, i) => {
@@ -23,6 +26,19 @@ function moyenneMobile(donnees: { date: string; poids: number }[], n: number) {
     return { ...d, tendance: Math.round(moy * 10) / 10 };
   });
 }
+
+const BtnPlage = ({ plage, actif, onClick }: { plage: string; actif: boolean; onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    className={`px-2.5 py-0.5 rounded-md text-xs font-semibold transition-all ${
+      actif
+        ? 'bg-green-600 text-white'
+        : 'bg-slate-100 dark:bg-gray-800 text-slate-400 dark:text-slate-500'
+    }`}
+  >
+    {plage}
+  </button>
+);
 
 export function Progress() {
   const { user } = useStore();
@@ -38,10 +54,24 @@ export function Progress() {
     [userId],
   ) ?? [];
 
-  const debut7j = format(subDays(new Date(), 6), 'yyyy-MM-dd');
-  const repas7j = useLiveQuery(
-    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debut7j).toArray() : Promise.resolve([] as import('../../types').Repas[]),
-    [userId],
+  const [plageCalories, setPlageCalories] = useState<PlageDates>('7j');
+  const [plagePoids, setPlagePoids] = useState<PlageDates>('tout');
+
+  const debutCal = useMemo(() => {
+    if (plageCalories === 'tout') return '0000-00-00';
+    const nb = plageCalories === '7j' ? 7 : plageCalories === '30j' ? 30 : 90;
+    return format(subDays(new Date(), nb - 1), 'yyyy-MM-dd');
+  }, [plageCalories]);
+
+  const repasRange = useLiveQuery(
+    () => {
+      if (!userId) return Promise.resolve([] as Repas[]);
+      const q = db.repas.where('userId').equals(userId);
+      return plageCalories === 'tout'
+        ? q.toArray()
+        : q.and((r) => r.date >= debutCal).toArray();
+    },
+    [userId, plageCalories, debutCal],
   ) ?? [];
 
   const [modalPesee, setModalPesee] = useState(false);
@@ -65,10 +95,19 @@ export function Progress() {
   const perteTotale = poidsInitial - poidsActuel;
   const resteAPerdre = Math.max(poidsActuel - poidsObjectif, 0);
 
-  const donneesGraphique = moyenneMobile(
-    pesees.map((p) => ({ date: p.date, poids: p.poids })),
-    7,
-  );
+  // IMC
+  const imc = user?.taille && poidsActuel > 0 ? calculerIMC(poidsActuel, user.taille) : 0;
+  const categorieIMC = imc > 0 ? getCategorieIMC(imc) : null;
+  const poidsIdealRange = user?.taille ? poidsIdeal(user.taille) : null;
+
+  const donneesGraphiqueBrut = pesees.map((p) => ({ date: p.date, poids: p.poids }));
+
+  const donneesGraphique = useMemo(() => {
+    if (plagePoids === 'tout') return moyenneMobile(donneesGraphiqueBrut, 7);
+    const nb = plagePoids === '7j' ? 7 : plagePoids === '30j' ? 30 : 90;
+    const cutoff = format(subDays(new Date(), nb), 'yyyy-MM-dd');
+    return moyenneMobile(donneesGraphiqueBrut.filter((p) => p.date >= cutoff), 7);
+  }, [donneesGraphiqueBrut, plagePoids]);
 
   let estimationDate: Date | null = null;
   if (pesees.length >= 2) {
@@ -102,15 +141,57 @@ export function Progress() {
     setTourDeTaille(''); setHanches(''); setPoitrine(''); setNoteM(''); setModalMesure(false);
   };
 
-  const donneesCalories = Array.from({ length: 7 }, (_, i) => {
-    const d = format(subDays(new Date(), 6 - i), 'yyyy-MM-dd');
-    const cal = repas7j.filter((r) => r.date === d).reduce((s, r) => s + r.calories, 0);
-    return {
-      date: d,
-      label: i === 6 ? "Auj." : format(subDays(new Date(), 6 - i), 'EEE', { locale: fr }),
-      calories: cal,
-    };
-  });
+  // Données calories selon la plage sélectionnée
+  const donneesCalories = useMemo(() => {
+    if (plageCalories === '7j' || plageCalories === '30j') {
+      const nb = plageCalories === '7j' ? 7 : 30;
+      return Array.from({ length: nb }, (_, i) => {
+        const d = format(subDays(new Date(), nb - 1 - i), 'yyyy-MM-dd');
+        const cal = repasRange.filter((r) => r.date === d).reduce((s, r) => s + r.calories, 0);
+        const label = i === nb - 1 ? 'Auj.'
+          : plageCalories === '7j'
+          ? format(subDays(new Date(), nb - 1 - i), 'EEE', { locale: fr })
+          : format(subDays(new Date(), nb - 1 - i), 'd/MM');
+        return { date: d, label, calories: cal };
+      });
+    }
+
+    if (plageCalories === '90j') {
+      // Moyennes hebdomadaires sur 13 semaines
+      return Array.from({ length: 13 }, (_, i) => {
+        const endD = subDays(new Date(), (12 - i) * 7);
+        const startD = subDays(endD, 6);
+        const startStr = format(startD, 'yyyy-MM-dd');
+        const endStr = format(endD, 'yyyy-MM-dd');
+        const repasS = repasRange.filter((r) => r.date >= startStr && r.date <= endStr);
+        const calTotal = repasS.reduce((s, r) => s + r.calories, 0);
+        const joursAvecData = new Set(repasS.map((r) => r.date)).size;
+        return {
+          date: endStr,
+          label: format(startD, 'd/MM'),
+          calories: joursAvecData > 0 ? Math.round(calTotal / joursAvecData) : 0,
+        };
+      });
+    }
+
+    // 'tout' : moyennes mensuelles
+    if (repasRange.length === 0) return [];
+    const parMois: Record<string, { total: number; jours: Set<string> }> = {};
+    repasRange.forEach((r) => {
+      const mois = r.date.slice(0, 7);
+      if (!parMois[mois]) parMois[mois] = { total: 0, jours: new Set() };
+      parMois[mois].total += r.calories;
+      parMois[mois].jours.add(r.date);
+    });
+    return Object.entries(parMois)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([mois, d]) => ({
+        date: mois,
+        label: format(new Date(mois + '-15'), 'MMM yy', { locale: fr }),
+        calories: Math.round(d.total / d.jours.size),
+      }));
+  }, [repasRange, plageCalories]);
+
   const objectifCal = user?.objectifCalories ?? 0;
 
   const formatDate = (dateStr: string) => {
@@ -131,6 +212,8 @@ export function Progress() {
       </div>
     );
   };
+
+  const labelCalories = plageCalories === '90j' ? 'Moy. hebdo' : plageCalories === 'tout' ? 'Moy. mensuelle' : 'Calories';
 
   return (
     <Layout
@@ -186,23 +269,89 @@ export function Progress() {
         )}
       </Card>
 
-      {/* Graphique calories 7 jours */}
+      {/* IMC */}
+      {imc > 0 && categorieIMC && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Indice de Masse Corporelle</h3>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${categorieIMC.color} ${categorieIMC.bgColor}`}>
+              {categorieIMC.label}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="text-center shrink-0">
+              <p className={`text-4xl font-black tabular-nums ${categorieIMC.color}`}>{imc}</p>
+              <p className="text-xs text-slate-400 mt-0.5">IMC</p>
+            </div>
+
+            <div className="flex-1">
+              {/* Barre colorée */}
+              <div className="flex h-3 rounded-full overflow-hidden">
+                <div className="flex-1 bg-blue-300 dark:bg-blue-600" />
+                <div className="flex-1 bg-green-400 dark:bg-green-600" />
+                <div className="flex-1 bg-amber-400 dark:bg-amber-600" />
+                <div className="flex-1 bg-orange-400 dark:bg-orange-600" />
+                <div className="flex-1 bg-red-400 dark:bg-red-600" />
+              </div>
+              {/* Curseur positionné sur la barre (plage 15–45) */}
+              <div className="relative h-3 -mt-3 mb-1 pointer-events-none">
+                {(() => {
+                  const pct = Math.min(Math.max((imc - 15) / (45 - 15), 0), 1);
+                  return (
+                    <div
+                      className="absolute top-0 bottom-0 w-1 bg-slate-800 dark:bg-white rounded-full -translate-x-1/2 shadow"
+                      style={{ left: `${pct * 100}%` }}
+                    />
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-300 dark:text-slate-600 mt-1">
+                <span>15</span>
+                <span>18.5</span>
+                <span>25</span>
+                <span>30</span>
+                <span>35</span>
+                <span>45</span>
+              </div>
+            </div>
+          </div>
+
+          {poidsIdealRange && (
+            <p className="text-xs text-slate-400 mt-3">
+              Poids idéal pour {user!.taille} cm :
+              <span className="font-semibold text-green-600 dark:text-green-400 ml-1">
+                {poidsIdealRange.min} – {poidsIdealRange.max} kg
+              </span>
+            </p>
+          )}
+        </Card>
+      )}
+
+      {/* Graphique calories */}
       <Card>
-        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1">Calories — 7 derniers jours</h3>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Calories</h3>
+          <div className="flex gap-1">
+            {(['7j', '30j', '90j', 'tout'] as PlageDates[]).map((p) => (
+              <BtnPlage key={p} plage={p === 'tout' ? 'Tout' : p} actif={plageCalories === p} onClick={() => setPlageCalories(p)} />
+            ))}
+          </div>
+        </div>
         {objectifCal > 0 && (
           <p className="text-xs text-slate-400 mb-3">Objectif : {objectifCal} kcal/j</p>
         )}
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={donneesCalories} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}`} />
             <Tooltip
-              formatter={(val) => [`${val ?? 0} kcal`, 'Calories']}
+              formatter={(val) => [`${val ?? 0} kcal`, labelCalories]}
               labelStyle={{ color: '#64748b', fontSize: 12 }}
               contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
             />
-            {objectifCal > 0 && (
+            {objectifCal > 0 && plageCalories !== 'tout' && (
               <ReferenceLine
                 y={objectifCal}
                 stroke="#16a34a"
@@ -305,7 +454,14 @@ export function Progress() {
 
       {/* Courbe de poids */}
       <Card>
-        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">Courbe de poids</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">Courbe de poids</h3>
+          <div className="flex gap-1">
+            {(['7j', '30j', '90j', 'tout'] as PlageDates[]).map((p) => (
+              <BtnPlage key={p} plage={p === 'tout' ? 'Tout' : p} actif={plagePoids === p} onClick={() => setPlagePoids(p)} />
+            ))}
+          </div>
+        </div>
         {donneesGraphique.length < 2 ? (
           <div className="flex flex-col items-center py-8 text-slate-400">
             <Scale size={36} className="mb-2 text-slate-200" strokeWidth={1.5} />
