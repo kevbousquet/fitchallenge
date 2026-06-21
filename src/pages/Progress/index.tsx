@@ -18,6 +18,46 @@ import type { Pesee, Mesure, Repas } from '../../types';
 
 type PlageDates = '7j' | '30j' | '90j' | 'tout';
 
+function IllustrationMesures() {
+  const points = [
+    { n: 1, y: 108, color: '#3b82f6', label: 'Poitrine',       desc: 'Au niveau du point le plus saillant' },
+    { n: 2, y: 176, color: '#ef4444', label: 'Tour de taille', desc: 'À l\'endroit le plus étroit (nombril)' },
+    { n: 3, y: 222, color: '#8b5cf6', label: 'Hanches',        desc: 'Au point le plus large des hanches' },
+  ];
+  return (
+    <div className="flex gap-3 items-start bg-slate-50 dark:bg-gray-800 rounded-xl p-3">
+      <svg viewBox="0 0 200 300" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-40 w-auto shrink-0">
+        {/* Silhouette torse féminin */}
+        <path
+          d="M100,42 C90,42 78,46 68,56 C58,66 50,78 46,94 C43,108 43,120 46,130 C49,140 56,150 62,160 C64,165 66,170 68,176 C66,184 56,198 48,218 C42,234 42,250 46,266 C50,278 54,285 58,290 L142,290 C146,285 150,278 154,266 C158,250 158,234 152,218 C144,198 134,184 132,176 C134,170 136,165 138,160 C144,150 151,140 154,130 C157,120 157,108 154,94 C150,78 142,66 132,56 C122,46 110,42 100,42Z"
+          fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5"
+        />
+        {/* Lignes de mesure */}
+        {points.map((p) => (
+          <g key={p.n}>
+            <line x1="12" y1={p.y} x2="188" y2={p.y} stroke={p.color} strokeWidth="2.5" strokeDasharray="6,3" />
+            <circle cx="12" cy={p.y} r="9" fill={p.color} />
+            <text x="12" y={p.y + 4} textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">{p.n}</text>
+          </g>
+        ))}
+      </svg>
+
+      <div className="flex-1 space-y-2.5 pt-0.5">
+        {points.map((p) => (
+          <div key={p.n} className="flex items-start gap-2">
+            <span className="w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5" style={{ background: p.color }}>{p.n}</span>
+            <div>
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{p.label}</p>
+              <p className="text-[10px] text-slate-400 leading-tight">{p.desc}</p>
+            </div>
+          </div>
+        ))}
+        <p className="text-[10px] text-slate-300 dark:text-slate-600 pt-1">Debout, à jeun, ruban bien horizontal.</p>
+      </div>
+    </div>
+  );
+}
+
 function moyenneMobile(donnees: { date: string; poids: number }[], n: number) {
   return donnees.map((d, i) => {
     const debut = Math.max(0, i - n + 1);
@@ -541,9 +581,7 @@ export function Progress() {
       {/* Modal mesures */}
       <Modal ouvert={modalMesure} onFermer={() => setModalMesure(false)} titre="Mesures corporelles">
         <div className="space-y-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Mesurez-vous le matin, debout, à jeun. Remplissez au moins une valeur.
-          </p>
+          <IllustrationMesures />
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="label text-blue-600">Tour taille (cm)</label>
