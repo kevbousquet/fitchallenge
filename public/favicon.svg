@@ -6,6 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="100" height="100" rx="22" fill="url(#bg)"/>
-  <!-- Éclair centré : shaft supérieur gauche → jonction → shaft inférieur droit -->
-  <polygon points="62,6 25,54 46,54 39,94 75,46 54,46" fill="white"/>
+  <rect x="32" y="44" width="36" height="12" rx="6" fill="white"/>
+  <rect x="12" y="32" width="16" height="36" rx="8" fill="white"/>
+  <rect x="72" y="32" width="16" height="36" rx="8" fill="white"/>
 </svg>

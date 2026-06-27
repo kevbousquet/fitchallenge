@@ -1,6 +1,6 @@
 /**
  * Génère les icônes PNG pour la PWA FitChallenge.
- * Dessin : éclair blanc centré sur fond dégradé vert→teal, coins arrondis.
+ * Dessin : haltère (dumbbell) blanc sur fond dégradé vert→teal, coins arrondis.
  * Usage : npm run icons
  */
 import { Jimp } from 'jimp';
@@ -11,30 +11,27 @@ import { mkdir } from 'node:fs/promises';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, '..', 'public', 'icons');
 
-// Couleurs du dégradé (identiques à l'app)
 const C1 = { r: 22,  g: 163, b: 74  }; // #16a34a green-600
 const C2 = { r: 13,  g: 148, b: 136 }; // #0d9488 teal-600
 
-// Polygone de l'éclair — 6 sommets normalisés [0..1]
-const BOLT = [
-  [0.62, 0.06],
-  [0.25, 0.54],
-  [0.46, 0.54],
-  [0.39, 0.94],
-  [0.75, 0.46],
-  [0.54, 0.46],
-];
+// Coordonnées normalisées [0..1] du haltère (viewBox 100x100)
+const BAR   = { x: 0.32, y: 0.44, w: 0.36, h: 0.12, r: 0.06 };
+const LEFT  = { x: 0.12, y: 0.32, w: 0.16, h: 0.36, r: 0.08 };
+const RIGHT = { x: 0.72, y: 0.32, w: 0.16, h: 0.36, r: 0.08 };
 
-function inPoly(px, py, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i];
-    const [xj, yj] = poly[j];
-    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
+function inRoundedRect(px, py, { x, y, w, h, r }) {
+  if (px < x || px > x + w || py < y || py > y + h) return false;
+  if (px < x + r && py < y + r)       return (px-(x+r))**2   + (py-(y+r))**2   <= r*r;
+  if (px > x+w-r && py < y + r)       return (px-(x+w-r))**2 + (py-(y+r))**2   <= r*r;
+  if (px < x + r && py > y + h - r)   return (px-(x+r))**2   + (py-(y+h-r))**2 <= r*r;
+  if (px > x+w-r && py > y + h - r)   return (px-(x+w-r))**2 + (py-(y+h-r))**2 <= r*r;
+  return true;
+}
+
+function inDumbbell(nx, ny) {
+  return inRoundedRect(nx, ny, BAR)
+      || inRoundedRect(nx, ny, LEFT)
+      || inRoundedRect(nx, ny, RIGHT);
 }
 
 function lerp(a, b, t) {
@@ -43,26 +40,25 @@ function lerp(a, b, t) {
 
 async function generateIcon(size) {
   const img = new Jimp({ width: size, height: size, color: 0x00000000 });
-  const r = 0.22; // rayon des coins arrondis relatif
+  const r = 0.22;
 
   img.scan((x, y, idx) => {
     const nx = x / size;
     const ny = y / size;
 
-    // Clip coins arrondis
+    // Coins arrondis
     const inTL = nx < r && ny < r;
     const inTR = nx > 1 - r && ny < r;
     const inBL = nx < r && ny > 1 - r;
     const inBR = nx > 1 - r && ny > 1 - r;
     if (inTL && (nx - r) ** 2 + (ny - r) ** 2 > r * r) return;
-    if (inTR && (nx - (1 - r)) ** 2 + (ny - r) ** 2 > r * r) return;
-    if (inBL && (nx - r) ** 2 + (ny - (1 - r)) ** 2 > r * r) return;
-    if (inBR && (nx - (1 - r)) ** 2 + (ny - (1 - r)) ** 2 > r * r) return;
+    if (inTR && (nx - (1-r)) ** 2 + (ny - r) ** 2 > r * r) return;
+    if (inBL && (nx - r) ** 2 + (ny - (1-r)) ** 2 > r * r) return;
+    if (inBR && (nx - (1-r)) ** 2 + (ny - (1-r)) ** 2 > r * r) return;
 
-    // Dégradé diagonal
     const t = (nx + ny) / 2;
 
-    if (inPoly(nx, ny, BOLT)) {
+    if (inDumbbell(nx, ny)) {
       img.bitmap.data[idx]     = 255;
       img.bitmap.data[idx + 1] = 255;
       img.bitmap.data[idx + 2] = 255;
@@ -88,4 +84,3 @@ for (const size of [512, 192]) {
 }
 
 console.log('Terminé !');
-
