@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AnalyseRepas } from '../types';
 
 const PROMPT_ANALYSE = `Analyse cette photo de repas et retourne UNIQUEMENT un objet JSON valide (sans markdown ni texte autour) avec la structure suivante :
@@ -27,27 +26,50 @@ export async function analyserRepasParPhoto(
   imageBase64: string,
   mimeType: 'image/jpeg' | 'image/png' | 'image/webp',
 ): Promise<AnalyseRepas> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined;
 
   if (!apiKey) {
-    throw new Error('Clé API Gemini manquante. Vérifiez le fichier .env (VITE_GEMINI_API_KEY).');
+    throw new Error('Clé API OpenRouter manquante. Vérifiez le fichier .env (VITE_OPENROUTER_API_KEY).');
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://fitchallenge.vercel.app',
+    },
+    body: JSON.stringify({
+      model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+      max_tokens: 1024,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${imageBase64}` },
+            },
+            { type: 'text', text: PROMPT_ANALYSE },
+          ],
+        },
+      ],
+    }),
+  });
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data: imageBase64 } },
-    PROMPT_ANALYSE,
-  ]);
+  if (!response.ok) {
+    const erreur = await response.text();
+    throw new Error(`Erreur API OpenRouter : ${response.status} — ${erreur}`);
+  }
 
-  const texte = result.response.text();
+  const data = await response.json();
+  const texte = data.choices?.[0]?.message?.content ?? '';
   const cleaned = texte.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
 
   try {
     return JSON.parse(cleaned) as AnalyseRepas;
   } catch {
-    throw new Error(`Réponse Gemini non analysable : ${texte.slice(0, 200)}`);
+    throw new Error(`Réponse non analysable : ${texte.slice(0, 200)}`);
   }
 }
 
