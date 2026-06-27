@@ -1,6 +1,5 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AnalyseRepas } from '../types';
-
-const GEMINI_MODEL = 'gemini-1.5-flash';
 
 const PROMPT_ANALYSE = `Analyse cette photo de repas et retourne UNIQUEMENT un objet JSON valide (sans markdown ni texte autour) avec la structure suivante :
 
@@ -34,34 +33,15 @@ export async function analyserRepasParPhoto(
     throw new Error('Clé API Gemini manquante. Vérifiez le fichier .env (VITE_GEMINI_API_KEY).');
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { inline_data: { mime_type: mimeType, data: imageBase64 } },
-              { text: PROMPT_ANALYSE },
-            ],
-          },
-        ],
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.1 },
-      }),
-    },
-  );
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-  if (!response.ok) {
-    const erreur = await response.text();
-    throw new Error(`Erreur API Gemini : ${response.status} — ${erreur}`);
-  }
+  const result = await model.generateContent([
+    { inlineData: { mimeType, data: imageBase64 } },
+    PROMPT_ANALYSE,
+  ]);
 
-  const data = await response.json();
-  const texte = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-
-  // Nettoie le markdown si Gemini enveloppe dans ```json ... ```
+  const texte = result.response.text();
   const cleaned = texte.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
 
   try {
