@@ -6,7 +6,9 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
 import { Ruler, Scale, Trash2, Check, Trophy } from 'lucide-react';
-import { getPesees, getMesures, ajouterPesee as addPesee, supprimerPesee, ajouterMesure as addMesure, getRepasDepuis, getTousRepas } from '../../lib/db';
+import { getPesees, getMesures, ajouterPesee as addPesee, supprimerPesee, ajouterMesure as addMesure, getRepasDepuis, getTousRepas, getRepasParDate } from '../../lib/db';
+import { MacroBar } from '../../components/ui/MacroBar';
+import { calculerObjectifsMacros, OBJECTIF_LABELS } from '../../utils/macros';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -119,6 +121,15 @@ export function Progress() {
   const [nouveauPoids, setNouveauPoids] = useState('');
   const [noteP, setNoteP] = useState('');
   const [modalSuppression, setModalSuppression] = useState<string | null>(null);
+
+  const TODAY = format(new Date(), 'yyyy-MM-dd');
+  const [dateMacros, setDateMacros] = useState(TODAY);
+
+  const repasJourMacros = useDbQuery(
+    () => userId ? getRepasParDate(userId, dateMacros) : Promise.resolve([] as import('../../types').Repas[]),
+    [] as import('../../types').Repas[],
+    [userId, dateMacros],
+  );
 
   const [modalMesure, setModalMesure] = useState(false);
   const [tourDeTaille, setTourDeTaille] = useState('');
@@ -272,6 +283,56 @@ export function Progress() {
         </div>
       }
     >
+      {/* Macros journalières */}
+      {user && (() => {
+        const objectifs = calculerObjectifsMacros(user);
+        const proteines = repasJourMacros.reduce((s, r) => s + (r.proteines ?? 0), 0);
+        const glucides  = repasJourMacros.reduce((s, r) => s + (r.glucides  ?? 0), 0);
+        const lipides   = repasJourMacros.reduce((s, r) => s + (r.lipides   ?? 0), 0);
+        const calories  = repasJourMacros.reduce((s, r) => s + r.calories, 0);
+        const estAujourdhui = dateMacros === TODAY;
+        return (
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-semibold tracking-wide uppercase text-slate-400">Macros — Bilan</p>
+                <span className="text-[10px] text-slate-400">{OBJECTIF_LABELS[objectifs.objectifType]}</span>
+              </div>
+              <input
+                type="date"
+                value={dateMacros}
+                max={TODAY}
+                onChange={(e) => setDateMacros(e.target.value)}
+                className="text-xs border border-slate-200 dark:border-gray-700 rounded-lg px-2 py-1 dark:bg-gray-800 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-green-500"
+              />
+            </div>
+
+            {repasJourMacros.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">
+                {estAujourdhui ? 'Aucun repas enregistré aujourd\'hui' : 'Aucun repas ce jour-là'}
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <span className="text-xs text-slate-400">{repasJourMacros.length} repas</span>
+                  <span className="text-sm font-black text-slate-700 dark:text-gray-200 tabular-nums">
+                    {calories} <span className="text-xs font-medium text-slate-400">/ {user.objectifCalories} kcal</span>
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <MacroBar emoji="🥩" label="Protéines" consomme={proteines} objectif={objectifs.proteines}
+                    couleur="bg-blue-500" bgClair="bg-blue-50 dark:bg-blue-900/20" textColor="text-blue-600" />
+                  <MacroBar emoji="🍚" label="Glucides"  consomme={glucides}  objectif={objectifs.glucides}
+                    couleur="bg-amber-400" bgClair="bg-amber-50 dark:bg-amber-900/20" textColor="text-amber-600" />
+                  <MacroBar emoji="🥑" label="Lipides"   consomme={lipides}   objectif={objectifs.lipides}
+                    couleur="bg-rose-400" bgClair="bg-rose-50 dark:bg-rose-900/20" textColor="text-rose-500" />
+                </div>
+              </>
+            )}
+          </Card>
+        );
+      })()}
+
       {/* Résumé poids */}
       <Card gradient className="text-white">
         <div className="grid grid-cols-3 gap-3 text-center">

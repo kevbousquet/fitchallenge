@@ -19,6 +19,8 @@ import { CHALLENGES } from '../../utils/challenges';
 import { calculerStreak } from '../../utils/streak';
 import { useStepCounter } from '../../hooks/useStepCounter';
 import { analyserRepasParPhoto, fileToBase64 } from '../../services/claudeApi';
+import { MacroBar } from '../../components/ui/MacroBar';
+import { calculerObjectifsMacros, OBJECTIF_LABELS } from '../../utils/macros';
 import { rechercherParCode } from '../../services/openFoodFacts';
 import type { ProduitOFF } from '../../services/openFoodFacts';
 import { INGREDIENTS, CATEGORIE_LABELS, CATEGORIE_COLORS } from '../../data/ingredients';
@@ -377,21 +379,32 @@ export function Home() {
       </Card>
 
       {/* Macros */}
-      {repasAujourdhui.length > 0 && (
+      {user && (
         <Card>
-          <p className="text-xs font-semibold tracking-wide uppercase text-slate-400 mb-3">Macros du jour</p>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: 'Protéines', val: repasAujourdhui.reduce((s, r) => s + (r.proteines ?? 0), 0), color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-              { label: 'Glucides',  val: repasAujourdhui.reduce((s, r) => s + (r.glucides ?? 0), 0),  color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-              { label: 'Lipides',   val: repasAujourdhui.reduce((s, r) => s + (r.lipides ?? 0), 0),   color: 'text-red-500',   bg: 'bg-red-50 dark:bg-red-900/20' },
-            ].map((m) => (
-              <div key={m.label} className={`${m.bg} rounded-xl p-3 text-center`}>
-                <p className={`text-xl font-black tabular-nums ${m.color}`}>{Math.round(m.val)}g</p>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">{m.label}</p>
-              </div>
-            ))}
-          </div>
+          {(() => {
+            const objectifs = calculerObjectifsMacros(user);
+            const proteines = repasAujourdhui.reduce((s, r) => s + (r.proteines ?? 0), 0);
+            const glucides  = repasAujourdhui.reduce((s, r) => s + (r.glucides  ?? 0), 0);
+            const lipides   = repasAujourdhui.reduce((s, r) => s + (r.lipides   ?? 0), 0);
+            return (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold tracking-wide uppercase text-slate-400">Macros du jour</p>
+                  <span className="text-[10px] bg-slate-100 dark:bg-gray-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">
+                    {OBJECTIF_LABELS[objectifs.objectifType]}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <MacroBar emoji="🥩" label="Protéines" consomme={proteines} objectif={objectifs.proteines}
+                    couleur="bg-blue-500" bgClair="bg-blue-50 dark:bg-blue-900/20" textColor="text-blue-600" />
+                  <MacroBar emoji="🍚" label="Glucides"  consomme={glucides}  objectif={objectifs.glucides}
+                    couleur="bg-amber-400" bgClair="bg-amber-50 dark:bg-amber-900/20" textColor="text-amber-600" />
+                  <MacroBar emoji="🥑" label="Lipides"   consomme={lipides}   objectif={objectifs.lipides}
+                    couleur="bg-rose-400" bgClair="bg-rose-50 dark:bg-rose-900/20" textColor="text-rose-500" />
+                </div>
+              </>
+            );
+          })()}
         </Card>
       )}
 
