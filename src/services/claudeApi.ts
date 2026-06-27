@@ -1,15 +1,6 @@
-// TODO(prod): En production, ne PAS appeler l'API Anthropic directement depuis
-// le client — la clé API serait exposée dans le bundle JavaScript.
-// Créer un backend proxy (ex. Node.js/Express) qui :
-//   1. Reçoit la photo en multipart ou base64
-//   2. Appelle api.anthropic.com côté serveur
-//   3. Renvoie le JSON analysé au client
-// La variable VITE_ANTHROPIC_API_KEY ne doit exister QUE pour le développement local.
-
 import type { AnalyseRepas } from '../types';
 
-const API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL   = 'claude-sonnet-4-6';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 const PROMPT_ANALYSE = `Analyse cette photo de repas et retourne UNIQUEMENT un objet JSON valide (sans markdown ni texte autour) avec la structure suivante :
 
@@ -37,60 +28,50 @@ export async function analyserRepasParPhoto(
   imageBase64: string,
   mimeType: 'image/jpeg' | 'image/png' | 'image/webp',
 ): Promise<AnalyseRepas> {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 
   if (!apiKey) {
-    throw new Error('Clé API Anthropic manquante. Vérifiez le fichier .env (VITE_ANTHROPIC_API_KEY).');
+    throw new Error('Clé API Gemini manquante. Vérifiez le fichier .env (VITE_GEMINI_API_KEY).');
   }
 
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      // Nécessaire pour les appels directs depuis le navigateur
-      'anthropic-dangerous-direct-browser-access': 'true',
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { inline_data: { mime_type: mimeType, data: imageBase64 } },
+              { text: PROMPT_ANALYSE },
+            ],
+          },
+        ],
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.1 },
+      }),
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mimeType,
-                data: imageBase64,
-              },
-            },
-            { type: 'text', text: PROMPT_ANALYSE },
-          ],
-        },
-      ],
-    }),
-  });
+  );
 
   if (!response.ok) {
     const erreur = await response.text();
-    throw new Error(`Erreur API Claude : ${response.status} — ${erreur}`);
+    throw new Error(`Erreur API Gemini : ${response.status} — ${erreur}`);
   }
 
   const data = await response.json();
-  const texte = data.content?.[0]?.text ?? '';
+  const texte = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+  // Nettoie le markdown si Gemini enveloppe dans ```json ... ```
+  const cleaned = texte.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
 
   try {
-    return JSON.parse(texte) as AnalyseRepas;
+    return JSON.parse(cleaned) as AnalyseRepas;
   } catch {
-    throw new Error(`Réponse Claude non analysable : ${texte.slice(0, 200)}`);
+    throw new Error(`Réponse Gemini non analysable : ${texte.slice(0, 200)}`);
   }
 }
 
 // Convertit un fichier image en JPEG base64 via Canvas
-// (gère les formats non supportés par Claude : HEIC, HEIF, BMP, etc.)
 export async function fileToBase64(
   file: File,
 ): Promise<{ base64: string; mimeType: 'image/jpeg' | 'image/png' | 'image/webp' }> {
@@ -101,7 +82,6 @@ export async function fileToBase64(
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      // Redimensionne si l'image est trop grande (max 1568px côté le plus long)
       const MAX = 1568;
       let { width, height } = img;
       if (width > MAX || height > MAX) {
@@ -120,7 +100,6 @@ export async function fileToBase64(
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Convertit toujours en JPEG (compatible avec tous les téléphones)
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       const base64 = dataUrl.split(',')[1];
       resolve({ base64, mimeType: 'image/jpeg' });
