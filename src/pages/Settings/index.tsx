@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Footprints, Droplets, Bell, BellOff, UtensilsCrossed, Scale, Moon, Sun,
   Check, Save, User, Upload, Trash2, Target, Dumbbell, Ban, Wine, Candy,
@@ -11,7 +10,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { TOUS_LES_CHALLENGES } from '../../utils/challenges';
 import { calculerObjectifCalories } from '../../utils/bmr';
-import { db } from '../../db/database';
+import { exporterToutesDonnees, supprimerToutesDonnees } from '../../lib/db';
 import {
   getClientId, setClientId,
   isConnecte as gfitConnecteCheck,
@@ -35,7 +34,6 @@ const CHALLENGE_ICONS: Record<ChallengeId, IconComp> = {
 };
 
 export function Settings() {
-  const navigate = useNavigate();
   const { user, sauvegarderUser, deconnecterProfil } = useStore();
 
   const [prenom, setPrenom]               = useState(user?.prenom ?? '');
@@ -121,11 +119,9 @@ export function Settings() {
   };
 
   const exporterDonnees = async () => {
-    const [users, repas, journees, pesees, badges, favoris, mesures] = await Promise.all([
-      db.users.toArray(), db.repas.toArray(), db.journees.toArray(),
-      db.pesees.toArray(), db.badges.toArray(), db.favoris.toArray(), db.mesures.toArray(),
-    ]);
-    const blob = new Blob([JSON.stringify({ users, repas, journees, pesees, badges, favoris, mesures }, null, 2)], { type: 'application/json' });
+    if (!user?.id) return;
+    const donnees = await exporterToutesDonnees(user.id);
+    const blob = new Blob([JSON.stringify(donnees, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -136,8 +132,9 @@ export function Settings() {
 
   const resetApp = async () => {
     if (!confirm('Supprimer TOUTES les données ? Cette action est irréversible.')) return;
-    await Promise.all([db.users.clear(), db.repas.clear(), db.journees.clear(), db.pesees.clear(), db.badges.clear(), db.favoris.clear(), db.mesures.clear()]);
-    window.location.reload();
+    if (!user?.id) return;
+    await supprimerToutesDonnees(user.id);
+    await deconnecterProfil();
   };
 
   if (!user) return null;
@@ -369,12 +366,12 @@ export function Settings() {
       <Card>
         <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-3">Profils</h3>
         <button
-          onClick={() => { deconnecterProfil(); navigate('/profils'); }}
+          onClick={async () => { await deconnecterProfil(); }}
           className="w-full flex items-center justify-between p-3 rounded-2xl border border-slate-200 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-800 transition-colors"
         >
           <div className="flex items-center gap-3">
             <User size={16} className="text-slate-400" />
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Changer de profil</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Se déconnecter</span>
           </div>
           <ChevronRight size={16} className="text-slate-300" />
         </button>
@@ -394,7 +391,7 @@ export function Settings() {
       </Card>
 
       <div className="text-center text-xs text-slate-400 pb-4">
-        FitChallenge v0.2 · Toutes les données sont stockées sur cet appareil uniquement
+        FitChallenge v0.2 · Données sauvegardées dans le cloud
       </div>
     </Layout>
   );

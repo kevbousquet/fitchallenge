@@ -3,7 +3,7 @@
 export type CategoriRepas = 'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation';
 
 export interface User {
-  id?: number;
+  id?: string;           // UUID Supabase auth
   prenom: string;
   sexe: 'homme' | 'femme';
   age: number;
@@ -52,8 +52,8 @@ export interface AlimentDetail {
 }
 
 export interface Repas {
-  id?: number;
-  userId: number;
+  id?: string;           // UUID
+  userId: string;
   date: string;
   nom: string;
   calories: number;
@@ -67,8 +67,8 @@ export interface Repas {
 }
 
 export interface FavoriRepas {
-  id?: number;
-  userId: number;
+  id?: string;           // UUID
+  userId: string;
   nom: string;
   calories: number;
   proteines?: number;
@@ -78,8 +78,8 @@ export interface FavoriRepas {
 }
 
 export interface Mesure {
-  id?: number;
-  userId: number;
+  id?: string;           // UUID
+  userId: string;
   date: string;
   tourDeTaille?: number;
   hanches?: number;
@@ -88,8 +88,8 @@ export interface Mesure {
 }
 
 export interface Journee {
-  id?: number;
-  userId: number;
+  id?: string;           // UUID
+  userId: string;
   date: string;
   pas: number;
   verresBus: number;
@@ -106,8 +106,8 @@ export interface Journee {
 }
 
 export interface Pesee {
-  id?: number;
-  userId: number;
+  id?: string;           // UUID
+  userId: string;
   date: string;
   poids: number;
   note?: string;
@@ -135,8 +135,8 @@ export interface BadgeInfo {
 }
 
 export interface BadgeDebloque {
-  id?: number;
-  userId: number;
+  id?: string;           // UUID
+  userId: string;
   cle: BadgeCle;
   debloqueLeDate: string;
 }

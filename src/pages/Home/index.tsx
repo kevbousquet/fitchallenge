@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../hooks/useDbQuery';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import confetti from 'canvas-confetti';
@@ -8,7 +8,7 @@ import {
   Camera, Pencil, Star, Plus, Check, Flame, Sunrise, Sun, Sunset, Apple,
   ChevronRight, Trash2, ScanLine, RefreshCw, Search, X,
 } from 'lucide-react';
-import { db } from '../../db/database';
+import { getRepasParDate, getToutesJournees, ajouterRepas as addRepas, ajouterFavori, supprimerFavori, getFavoris } from '../../lib/db';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -58,16 +58,18 @@ function devinerCategorie(): CategoriRepas {
 
 export function Home() {
   const { user, journeeAujourdhui, mettreAJourJournee } = useStore();
-  const userId = user?.id ?? 0;
+  const userId = user?.id ?? '';
 
-  const repasAujourdhui = useLiveQuery(
-    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date === TODAY).toArray() : Promise.resolve([] as Repas[]),
+  const repasAujourdhui = useDbQuery(
+    () => userId ? getRepasParDate(userId, TODAY) : Promise.resolve([] as Repas[]),
+    [] as Repas[],
     [userId],
-  ) ?? [];
-  const toutesJournees = useLiveQuery(
-    () => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([] as import('../../types').Journee[]),
+  );
+  const toutesJournees = useDbQuery(
+    () => userId ? getToutesJournees(userId) : Promise.resolve([] as import('../../types').Journee[]),
+    [] as import('../../types').Journee[],
     [userId],
-  ) ?? [];
+  );
 
   const streak = calculerStreak(toutesJournees);
   const caloriesConsommees = repasAujourdhui.reduce((s, r) => s + r.calories, 0);
@@ -476,7 +478,8 @@ export function Home() {
 }
 
 // ─── Modal ajout repas ───────────────────────────────────────────────────────
-function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFermer: () => void; userId: number }) {
+function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFermer: () => void; userId: string }) {
+  const { refreshDb } = useStore();
   const [onglet, setOnglet] = useState<'photo' | 'manuel' | 'favoris' | 'scanner'>('photo');
   const [categorie, setCategorie] = useState<CategoriRepas>(devinerCategorie);
   const [nomManuel, setNomManuel] = useState('');
@@ -550,10 +553,11 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
 
-  const favoris = useLiveQuery(
-    () => userId ? db.favoris.where('userId').equals(userId).toArray() : Promise.resolve([] as FavoriRepas[]),
+  const favoris = useDbQuery(
+    () => userId ? getFavoris(userId) : Promise.resolve([] as FavoriRepas[]),
+    [] as FavoriRepas[],
     [userId],
-  ) ?? [];
+  );
 
   // Scanner lifecycle: start when tab is active, stop otherwise
   useEffect(() => {
@@ -647,10 +651,11 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
       ? { userId, date: TODAY, createdAt: TODAY, categorie, nom: analyse.description || 'Repas analysé', calories: analyse.caloriesTotal, proteines: analyse.proteinesTotal, glucides: analyse.glucidesTotal, lipides: analyse.lipidesTotal, aliments: analyse.aliments, photoBase64: photoBase64 ?? undefined }
       : { userId, date: TODAY, createdAt: TODAY, categorie, nom: nomManuel, calories: parseFloat(calManuel), proteines: protManuel ? parseFloat(protManuel) : undefined, glucides: glucManuel ? parseFloat(glucManuel) : undefined, lipides: lipManuel ? parseFloat(lipManuel) : undefined };
 
-    await db.repas.add(repas);
+    await addRepas(repas as Omit<Repas, 'id'>);
     if (sauverFavori && repas.nom) {
-      await db.favoris.add({ userId, nom: repas.nom, calories: repas.calories, proteines: repas.proteines, glucides: repas.glucides, lipides: repas.lipides, categorie: repas.categorie });
+      await ajouterFavori({ userId, nom: repas.nom, calories: repas.calories, proteines: repas.proteines, glucides: repas.glucides, lipides: repas.lipides, categorie: repas.categorie });
     }
+    refreshDb();
     reinitialiser();
   };
 
@@ -906,7 +911,7 @@ function ModalAjoutRepas({ ouvert, onFermer, userId }: { ouvert: boolean; onFerm
                       <p className="text-sm font-semibold text-slate-800 dark:text-gray-200 truncate">{fav.nom}</p>
                       <p className="text-xs text-slate-400 tabular-nums">{fav.calories} kcal</p>
                     </div>
-                    <button onClick={() => db.favoris.delete(fav.id!)} className="p-1.5 text-slate-300 hover:text-red-400 rounded-lg">
+                    <button onClick={async () => { await supprimerFavori(fav.id!); refreshDb(); }} className="p-1.5 text-slate-300 hover:text-red-400 rounded-lg">
                       <Trash2 size={14} />
                     </button>
                   </div>

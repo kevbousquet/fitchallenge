@@ -161,8 +161,13 @@ export const INGREDIENTS: Ingredient[] = [
   { nom: 'Beurre',                   categorie: 'laitiers', calories100g: 751, proteines100g: 0.7, glucides100g: 0.6, lipides100g: 83,  note: '1 noisette ≈ 5g' },
 
   // ── Œufs ─────────────────────────────────────────────────────────────────
-  { nom: 'Œuf entier',               categorie: 'oeufs', calories100g: 155, proteines100g: 13,  glucides100g: 1.1, lipides100g: 11, note: '1 œuf ≈ 60g' },
+  { nom: 'Œuf entier',               categorie: 'oeufs', calories100g: 155, proteines100g: 13,  glucides100g: 1.1, lipides100g: 11,  note: '1 œuf ≈ 60g' },
   { nom: 'Blanc d\'œuf',             categorie: 'oeufs', calories100g: 52,  proteines100g: 11,  glucides100g: 0.7, lipides100g: 0.2, note: '1 blanc ≈ 35g' },
+  { nom: 'Jaune d\'œuf',             categorie: 'oeufs', calories100g: 322, proteines100g: 16,  glucides100g: 3.6, lipides100g: 28,  note: '1 jaune ≈ 18g' },
+  { nom: 'Œuf dur',                  categorie: 'oeufs', calories100g: 155, proteines100g: 13,  glucides100g: 1.1, lipides100g: 11,  note: '1 œuf ≈ 60g' },
+  { nom: 'Œufs brouillés',           categorie: 'oeufs', calories100g: 149, proteines100g: 10,  glucides100g: 1.4, lipides100g: 11,  note: '2 œufs ≈ 120g' },
+  { nom: 'Œuf à la coque',           categorie: 'oeufs', calories100g: 155, proteines100g: 13,  glucides100g: 1.1, lipides100g: 11,  note: '1 œuf ≈ 60g' },
+  { nom: 'Omelette nature',          categorie: 'oeufs', calories100g: 154, proteines100g: 10,  glucides100g: 1.3, lipides100g: 12,  note: '2 œufs ≈ 130g' },
 
   // ── Matières grasses ──────────────────────────────────────────────────────
   { nom: 'Huile d\'olive',           categorie: 'matiereGrasse', calories100g: 884, proteines100g: 0, glucides100g: 0,   lipides100g: 100, note: '1 c.à.s ≈ 10g' },

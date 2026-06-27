@@ -6,7 +6,7 @@ import {
   Check, ArrowRight, ArrowLeft, Info, Zap,
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { db } from '../../db/database';
+import { ajouterPesee } from '../../lib/db';
 import { calculerObjectifCalories } from '../../utils/bmr';
 import { TOUS_LES_CHALLENGES } from '../../utils/challenges';
 import { Button } from '../../components/ui/Button';
@@ -29,7 +29,7 @@ const CHALLENGE_ICONS: Record<ChallengeId, IconComp> = {
 
 export function Onboarding() {
   const navigate = useNavigate();
-  const { sauvegarderUser } = useStore();
+  const { sauvegarderUser, session } = useStore();
 
   const [etape, setEtape] = useState<Etape>('profil');
   const [prenom, setPrenom] = useState('');
@@ -45,20 +45,13 @@ export function Onboarding() {
   ]);
 
   const calculerEtProposer = () => {
-    const obj = calculerObjectifCalories(
-      sexe,
-      parseFloat(poidsActuel),
-      parseFloat(taille),
-      parseInt(age),
-    );
+    const obj = calculerObjectifCalories(sexe, parseFloat(poidsActuel), parseFloat(taille), parseInt(age));
     setObjectifCalories(Math.max(obj, 1200));
     setEtape('calories');
   };
 
   const toggleChallenge = (id: ChallengeId) => {
-    setChallengesActifs((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
-    );
+    setChallengesActifs((prev) => prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]);
   };
 
   const terminer = async () => {
@@ -80,10 +73,10 @@ export function Onboarding() {
       createdAt: today,
     };
     await sauvegarderUser(user);
-    const idStr = localStorage.getItem('fitchallenge_userId');
-    const userId = idStr ? parseInt(idStr) : null;
+    // Ajouter la pesée de départ
+    const userId = session?.user?.id;
     if (userId) {
-      await db.pesees.add({ userId, date: today, poids, note: 'Poids de départ' });
+      await ajouterPesee({ userId, date: today, poids, note: 'Poids de départ' });
     }
     navigate('/');
   };
@@ -94,19 +87,17 @@ export function Onboarding() {
       <div className="px-6 pt-16 pb-8 text-white">
         <h1 className="text-4xl font-black tracking-tight">FitChallenge</h1>
         <p className="text-green-100 mt-1 text-lg">
-          {etape === 'profil'      && 'Parlez-nous de vous'}
-          {etape === 'calories'    && 'Votre objectif calorique'}
-          {etape === 'challenges'  && 'Vos challenges quotidiens'}
-          {etape === 'termine'     && "C'est parti !"}
+          {etape === 'profil'     && 'Parlez-nous de vous'}
+          {etape === 'calories'   && 'Votre objectif calorique'}
+          {etape === 'challenges' && 'Vos challenges quotidiens'}
+          {etape === 'termine'    && "C'est parti !"}
         </p>
         <div className="flex gap-2 mt-4">
           {(['profil', 'calories', 'challenges'] as Etape[]).map((e, i) => (
             <div
               key={e}
               className={`h-1.5 flex-1 rounded-full transition-all ${
-                ['profil', 'calories', 'challenges'].indexOf(etape) >= i
-                  ? 'bg-white'
-                  : 'bg-white/30'
+                ['profil', 'calories', 'challenges'].indexOf(etape) >= i ? 'bg-white' : 'bg-white/30'
               }`}
             />
           ))}
@@ -118,36 +109,23 @@ export function Onboarding() {
 
         {/* Étape 1 : Profil */}
         {etape === 'profil' && (
-          <div className="space-y-5 animate-fade-in">
+          <div className="space-y-5">
             <div>
               <label className="label">Prénom</label>
-              <input
-                className="input"
-                placeholder="Votre prénom"
-                value={prenom}
-                onChange={(e) => setPrenom(e.target.value)}
-              />
+              <input className="input" placeholder="Votre prénom" value={prenom} onChange={(e) => setPrenom(e.target.value)} />
             </div>
-
             <div>
               <label className="label">Sexe</label>
               <div className="flex gap-3">
                 {(['homme', 'femme'] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSexe(s)}
-                    className={`flex-1 py-3 rounded-2xl border-2 font-semibold transition-all ${
-                      sexe === s
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-slate-200 text-slate-500'
-                    }`}
+                  <button key={s} onClick={() => setSexe(s)}
+                    className={`flex-1 py-3 rounded-2xl border-2 font-semibold transition-all ${sexe === s ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-500'}`}
                   >
                     {s === 'homme' ? 'Homme' : 'Femme'}
                   </button>
                 ))}
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Âge</label>
@@ -158,7 +136,6 @@ export function Onboarding() {
                 <input className="input" type="number" placeholder="175" value={taille} onChange={(e) => setTaille(e.target.value)} />
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Poids actuel (kg)</label>
@@ -169,18 +146,11 @@ export function Onboarding() {
                 <input className="input" type="number" step="0.1" placeholder="75.0" value={poidsObjectif} onChange={(e) => setPoidsObjectif(e.target.value)} />
               </div>
             </div>
-
             <div>
               <label className="label">Date cible (optionnelle)</label>
               <input className="input" type="date" value={dateCible} onChange={(e) => setDateCible(e.target.value)} />
             </div>
-
-            <Button
-              pleine
-              taille="lg"
-              onClick={calculerEtProposer}
-              disabled={!prenom || !age || !taille || !poidsActuel || !poidsObjectif}
-            >
+            <Button pleine taille="lg" onClick={calculerEtProposer} disabled={!prenom || !age || !taille || !poidsActuel || !poidsObjectif}>
               Suivant <ArrowRight size={16} />
             </Button>
           </div>
@@ -188,96 +158,60 @@ export function Onboarding() {
 
         {/* Étape 2 : Calories */}
         {etape === 'calories' && (
-          <div className="space-y-5 animate-fade-in">
+          <div className="space-y-5">
             <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-4 text-center">
-              <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                Objectif calculé par la formule Mifflin-St Jeor
-              </p>
-              <p className="text-5xl font-black text-green-600 dark:text-green-400 mt-2">
-                {objectifCalories}
-              </p>
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">Objectif calculé par la formule Mifflin-St Jeor</p>
+              <p className="text-5xl font-black text-green-600 dark:text-green-400 mt-2">{objectifCalories}</p>
               <p className="text-green-600 dark:text-green-400 font-medium">kcal / jour</p>
-              <p className="text-xs text-slate-500 mt-2">
-                Pour perdre environ 0,5 kg/semaine avec un niveau d'activité modéré
-              </p>
+              <p className="text-xs text-slate-500 mt-2">Pour perdre environ 0,5 kg/semaine avec un niveau d'activité modéré</p>
             </div>
-
             <div>
               <label className="label">Ajuster manuellement (kcal)</label>
-              <input
-                className="input text-center text-2xl font-bold"
-                type="number"
-                step="50"
-                min="1000"
-                max="3500"
-                value={objectifCalories}
-                onChange={(e) => setObjectifCalories(parseInt(e.target.value))}
-              />
+              <input className="input text-center text-2xl font-bold" type="number" step="50" min="1000" max="3500" value={objectifCalories} onChange={(e) => setObjectifCalories(parseInt(e.target.value))} />
             </div>
-
             <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-3">
               <Info size={14} className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-amber-700 dark:text-amber-300">
-                Minimum recommandé : 1200 kcal pour les femmes, 1500 kcal pour les hommes.
-                Consultez un médecin avant de vous fixer un objectif très restrictif.
+                Minimum recommandé : 1200 kcal pour les femmes, 1500 kcal pour les hommes. Consultez un médecin avant de vous fixer un objectif très restrictif.
               </p>
             </div>
-
             <div className="flex gap-3">
-              <Button variante="secondary" onClick={() => setEtape('profil')}>
-                <ArrowLeft size={16} /> Retour
-              </Button>
-              <Button pleine taille="lg" onClick={() => setEtape('challenges')}>
-                Suivant <ArrowRight size={16} />
-              </Button>
+              <Button variante="secondary" onClick={() => setEtape('profil')}><ArrowLeft size={16} /> Retour</Button>
+              <Button pleine taille="lg" onClick={() => setEtape('challenges')}>Suivant <ArrowRight size={16} /></Button>
             </div>
           </div>
         )}
 
         {/* Étape 3 : Challenges */}
         {etape === 'challenges' && (
-          <div className="space-y-4 animate-fade-in">
+          <div className="space-y-4">
             <p className="text-slate-500 dark:text-slate-400 text-sm">
               Sélectionnez les challenges que vous voulez suivre chaque jour. Vous pourrez les modifier plus tard.
             </p>
-
             <div className="space-y-2">
               {TOUS_LES_CHALLENGES.map((c) => {
                 const actif = challengesActifs.includes(c.id);
                 const CIcon = CHALLENGE_ICONS[c.id];
                 return (
-                  <button
-                    key={c.id}
-                    onClick={() => toggleChallenge(c.id)}
-                    className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${
-                      actif
-                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                        : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800'
-                    }`}
+                  <button key={c.id} onClick={() => toggleChallenge(c.id)}
+                    className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${actif ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}
                   >
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${actif ? 'bg-green-600' : 'bg-slate-100 dark:bg-gray-700'}`}>
                       <CIcon size={18} className={actif ? 'text-white' : 'text-slate-400'} />
                     </div>
                     <div className="flex-1">
-                      <p className={`font-semibold text-sm ${actif ? 'text-green-700 dark:text-green-300' : 'text-slate-700 dark:text-slate-300'}`}>
-                        {c.label}
-                      </p>
+                      <p className={`font-semibold text-sm ${actif ? 'text-green-700 dark:text-green-300' : 'text-slate-700 dark:text-slate-300'}`}>{c.label}</p>
                       <p className="text-xs text-slate-400">{c.description}</p>
                     </div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                      actif ? 'border-green-500 bg-green-500' : 'border-slate-300'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${actif ? 'border-green-500 bg-green-500' : 'border-slate-300'}`}>
                       {actif && <Check size={13} className="text-white" />}
                     </div>
                   </button>
                 );
               })}
             </div>
-
             <div className="flex gap-3 pt-2">
-              <Button variante="secondary" onClick={() => setEtape('calories')}>
-                <ArrowLeft size={16} /> Retour
-              </Button>
+              <Button variante="secondary" onClick={() => setEtape('calories')}><ArrowLeft size={16} /> Retour</Button>
               <Button pleine taille="lg" onClick={terminer} disabled={challengesActifs.length === 0}>
                 Démarrer <Zap size={16} />
               </Button>

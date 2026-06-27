@@ -1,32 +1,41 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { format } from 'date-fns';
-import { db } from './db/database';
+import { supabase } from './lib/supabase';
+import { getNbRepasDate, getPesees } from './lib/db';
 import { useStore } from './store/useStore';
-import { seedDemoData } from './db/seed';
-import { Onboarding }      from './pages/Onboarding';
-import { ProfileSelector } from './pages/ProfileSelector';
-import { Home }            from './pages/Home';
-import { Meals }           from './pages/Meals';
-import { Challenges }      from './pages/Challenges';
-import { Progress }        from './pages/Progress';
-import { Settings }        from './pages/Settings';
+import { Auth }       from './pages/Auth';
+import { Onboarding } from './pages/Onboarding';
+import { Home }       from './pages/Home';
+import { Meals }      from './pages/Meals';
+import { Challenges } from './pages/Challenges';
+import { Progress }   from './pages/Progress';
+import { Settings }   from './pages/Settings';
 
 function AppRoutes() {
-  const { user, chargement, chargerUser, chargerJournee } = useStore();
-  const nombreUtilisateurs = useLiveQuery(() => db.users.count(), []) ?? null;
+  const { session, user, chargement, setSession, chargerUser, chargerJournee } = useStore();
 
   useEffect(() => {
-    seedDemoData().then(() => {
+    // Session initiale
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
       chargerUser().then(() => {
-        if (localStorage.getItem('fitchallenge_userId')) {
-          chargerJournee();
-        }
+        if (session) chargerJournee();
       });
     });
+
+    // Écoute les changements d'auth (login / logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      chargerUser().then(() => {
+        if (session) chargerJournee();
+      });
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  // Thème sombre
   useEffect(() => {
     if (user?.themeSombre) {
       document.documentElement.classList.add('dark');
@@ -35,7 +44,7 @@ function AppRoutes() {
     }
   }, [user?.themeSombre]);
 
-  // Vérification des rappels à chaque ouverture de l'app
+  // Rappels notifications
   useEffect(() => {
     if (!user?.id || !('Notification' in window) || Notification.permission !== 'granted') return;
 
@@ -44,11 +53,10 @@ function AppRoutes() {
     const todayStr = format(now, 'yyyy-MM-dd');
 
     const check = async () => {
-      // Rappel repas
       if (user.notifRepasActif && user.notifRepasHeure && heureActuelle >= user.notifRepasHeure) {
         const cleLS = `notif_repas_${todayStr}`;
         if (!localStorage.getItem(cleLS)) {
-          const count = await db.repas.where('userId').equals(user.id!).and((r) => r.date === todayStr).count();
+          const count = await getNbRepasDate(user.id!, todayStr);
           if (count === 0) {
             new Notification('FitChallenge 🍽️', {
               body: "N'oubliez pas de saisir vos repas du jour !",
@@ -59,11 +67,10 @@ function AppRoutes() {
         }
       }
 
-      // Rappel pesée
       if (user.notifPeseeActif && user.notifPeseeHeure && heureActuelle >= user.notifPeseeHeure) {
         const cleLS = `notif_pesee_${todayStr}`;
         if (!localStorage.getItem(cleLS)) {
-          const pesees = await db.pesees.where('userId').equals(user.id!).sortBy('date');
+          const pesees = await getPesees(user.id!);
           const derniere = pesees[pesees.length - 1];
           const joursDepuis = derniere
             ? Math.floor((now.getTime() - new Date(derniere.date).getTime()) / 86_400_000)
@@ -82,7 +89,7 @@ function AppRoutes() {
     check();
   }, [user]);
 
-  if (chargement || nombreUtilisateurs === null) {
+  if (chargement) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-500 to-teal-500 flex flex-col items-center justify-center gap-4">
         <div className="text-6xl">💪</div>
@@ -92,7 +99,18 @@ function AppRoutes() {
     );
   }
 
-  if (nombreUtilisateurs === 0) {
+  // Pas connecté → page Auth
+  if (!session) {
+    return (
+      <Routes>
+        <Route path="/auth" element={<Auth />} />
+        <Route path="*" element={<Navigate to="/auth" replace />} />
+      </Routes>
+    );
+  }
+
+  // Connecté mais pas de profil créé → onboarding
+  if (!user) {
     return (
       <Routes>
         <Route path="/onboarding" element={<Onboarding />} />
@@ -101,16 +119,7 @@ function AppRoutes() {
     );
   }
 
-  if (!user) {
-    return (
-      <Routes>
-        <Route path="/profils" element={<ProfileSelector />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="*" element={<Navigate to="/profils" replace />} />
-      </Routes>
-    );
-  }
-
+  // Connecté + profil → app complète
   return (
     <Routes>
       <Route path="/"            element={<Home />} />
@@ -118,8 +127,6 @@ function AppRoutes() {
       <Route path="/challenges"  element={<Challenges />} />
       <Route path="/progression" element={<Progress />} />
       <Route path="/reglages"    element={<Settings />} />
-      <Route path="/profils"     element={<ProfileSelector />} />
-      <Route path="/onboarding"  element={<Onboarding />} />
       <Route path="*"            element={<Navigate to="/" replace />} />
     </Routes>
   );

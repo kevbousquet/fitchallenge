@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../hooks/useDbQuery';
 import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Sunrise, Sun, Sunset, Apple, Pencil, Star, Trash2, UtensilsCrossed } from 'lucide-react';
-import { db } from '../../db/database';
+import { getRepasParDate, supprimerRepas as deleteRepas, modifierRepas, ajouterFavori } from '../../lib/db';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -32,17 +32,16 @@ function catConfig(id: string): CatConfig | CatFallback {
 export function Meals() {
   const [dateSelectionnee, setDateSelectionnee] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [repasEdite, setRepasEdite] = useState<Repas | null>(null);
-  const [modalSuppression, setModalSuppression] = useState<number | null>(null);
+  const [modalSuppression, setModalSuppression] = useState<string | null>(null);
 
-  const { user } = useStore();
-  const userId = user?.id ?? 0;
+  const { user, refreshDb } = useStore();
+  const userId = user?.id ?? '';
 
-  const repas = useLiveQuery(
-    () => userId
-      ? db.repas.where('userId').equals(userId).and((r) => r.date === dateSelectionnee).reverse().sortBy('createdAt')
-      : Promise.resolve([] as Repas[]),
-    [dateSelectionnee, userId],
-  ) ?? [];
+  const repas = useDbQuery(
+    () => userId ? getRepasParDate(userId, dateSelectionnee) : Promise.resolve([] as Repas[]),
+    [] as Repas[],
+    [userId, dateSelectionnee],
+  );
 
   const totalCal = repas.reduce((s, r) => s + r.calories, 0);
 
@@ -51,14 +50,15 @@ export function Meals() {
     return { date: format(d, 'yyyy-MM-dd'), label: i === 0 ? "Auj." : format(d, 'EEE d', { locale: fr }) };
   });
 
-  const supprimerRepas = async (id: number) => {
-    await db.repas.delete(id);
+  const supprimerRepas = async (id: string) => {
+    await deleteRepas(id);
+    refreshDb();
     setModalSuppression(null);
   };
 
   const sauvegarderEdition = async () => {
     if (!repasEdite?.id) return;
-    await db.repas.update(repasEdite.id, {
+    await modifierRepas(repasEdite.id, {
       nom: repasEdite.nom,
       calories: repasEdite.calories,
       proteines: repasEdite.proteines,
@@ -66,11 +66,12 @@ export function Meals() {
       lipides: repasEdite.lipides,
       categorie: repasEdite.categorie,
     });
+    refreshDb();
     setRepasEdite(null);
   };
 
   const sauverFavori = async (r: Repas) => {
-    await db.favoris.add({ userId, nom: r.nom, calories: r.calories, proteines: r.proteines, glucides: r.glucides, lipides: r.lipides, categorie: r.categorie });
+    await ajouterFavori({ userId, nom: r.nom, calories: r.calories, proteines: r.proteines, glucides: r.glucides, lipides: r.lipides, categorie: r.categorie });
   };
 
   const repasParCat = CATS_ORDER.reduce<Record<string, Repas[]>>((acc, cat) => {

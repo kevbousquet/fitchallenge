@@ -1,67 +1,75 @@
 import { create } from 'zustand';
 import { format } from 'date-fns';
-import { db } from '../db/database';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import {
+  getProfile, creerProfile, updateProfile,
+  getJournee, creerJournee, modifierJournee,
+} from '../lib/db';
 import type { User, Journee } from '../types';
 
-const CLE_PROFIL_ACTIF = 'fitchallenge_userId';
-
 interface AppState {
+  session: Session | null;
   user: User | null;
   journeeAujourdhui: Journee | null;
   chargement: boolean;
+  dbVersion: number;
 
+  setSession: (session: Session | null) => void;
   chargerUser: () => Promise<void>;
   sauvegarderUser: (u: User) => Promise<void>;
-  definirUtilisateurActif: (id: number) => void;
-  deconnecterProfil: () => void;
+  deconnecterProfil: () => Promise<void>;
   chargerJournee: (date?: string) => Promise<void>;
   mettreAJourJournee: (data: Partial<Journee>) => Promise<void>;
+  refreshDb: () => void;
 }
 
 const dateAujourdhui = () => format(new Date(), 'yyyy-MM-dd');
 
 export const useStore = create<AppState>((set, get) => ({
+  session: null,
   user: null,
   journeeAujourdhui: null,
   chargement: true,
+  dbVersion: 0,
+
+  setSession: (session) => set({ session }),
 
   chargerUser: async () => {
-    const idStr = localStorage.getItem(CLE_PROFIL_ACTIF);
-    if (!idStr) {
+    const { session } = get();
+    if (!session?.user?.id) {
       set({ user: null, chargement: false });
       return;
     }
-    const user = await db.users.get(parseInt(idStr));
-    set({ user: user ?? null, chargement: false });
+    const user = await getProfile(session.user.id);
+    set({ user, chargement: false });
   },
 
   sauvegarderUser: async (u: User) => {
+    const { session } = get();
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
     if (u.id) {
-      await db.users.put(u);
+      await updateProfile(userId, u);
     } else {
-      const id = await db.users.add(u);
-      u = { ...u, id };
-      localStorage.setItem(CLE_PROFIL_ACTIF, String(id));
+      await creerProfile(userId, u);
+      u = { ...u, id: userId };
     }
-    set({ user: u });
+    set({ user: { ...u, id: userId } });
   },
 
-  definirUtilisateurActif: (id: number) => {
-    localStorage.setItem(CLE_PROFIL_ACTIF, String(id));
-  },
-
-  deconnecterProfil: () => {
-    localStorage.removeItem(CLE_PROFIL_ACTIF);
-    set({ user: null, journeeAujourdhui: null });
+  deconnecterProfil: async () => {
+    await supabase.auth.signOut();
+    set({ session: null, user: null, journeeAujourdhui: null });
   },
 
   chargerJournee: async (date?: string) => {
     const { user } = get();
     if (!user?.id) return;
     const d = date ?? dateAujourdhui();
-    let journee = await db.journees.where('[userId+date]').equals([user.id, d]).first();
+    let journee = await getJournee(user.id, d);
     if (!journee) {
-      const id = await db.journees.add({
+      journee = await creerJournee({
         userId: user.id,
         date: d,
         pas: 0,
@@ -75,7 +83,6 @@ export const useStore = create<AppState>((set, get) => ({
         parfaite: false,
         updatedAt: d,
       });
-      journee = await db.journees.get(id);
     }
     set({ journeeAujourdhui: journee ?? null });
   },
@@ -104,7 +111,9 @@ export const useStore = create<AppState>((set, get) => ({
       });
     }
 
-    await db.journees.update(journeeAujourdhui.id, updated);
+    await modifierJournee(journeeAujourdhui.id, updated);
     set({ journeeAujourdhui: updated });
   },
+
+  refreshDb: () => set((state) => ({ dbVersion: state.dbVersion + 1 })),
 }));

@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../hooks/useDbQuery';
 import { format, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
 import { Ruler, Scale, Trash2, Check, Trophy } from 'lucide-react';
-import { db } from '../../db/database';
+import { getPesees, getMesures, ajouterPesee as addPesee, supprimerPesee, ajouterMesure as addMesure, getRepasDepuis, getTousRepas } from '../../lib/db';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -81,18 +81,20 @@ const BtnPlage = ({ plage, actif, onClick }: { plage: string; actif: boolean; on
 );
 
 export function Progress() {
-  const { user } = useStore();
-  const userId = user?.id ?? 0;
+  const { user, refreshDb } = useStore();
+  const userId = user?.id ?? '';
 
-  const pesees = useLiveQuery(
-    () => userId ? db.pesees.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Pesee[]),
+  const pesees = useDbQuery(
+    () => userId ? getPesees(userId) : Promise.resolve([] as Pesee[]),
+    [] as Pesee[],
     [userId],
-  ) ?? [];
+  );
 
-  const mesures = useLiveQuery(
-    () => userId ? db.mesures.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Mesure[]),
+  const mesures = useDbQuery(
+    () => userId ? getMesures(userId) : Promise.resolve([] as Mesure[]),
+    [] as Mesure[],
     [userId],
-  ) ?? [];
+  );
 
   const [plageCalories, setPlageCalories] = useState<PlageDates>('7j');
   const [plagePoids, setPlagePoids] = useState<PlageDates>('tout');
@@ -103,21 +105,20 @@ export function Progress() {
     return format(subDays(new Date(), nb - 1), 'yyyy-MM-dd');
   }, [plageCalories]);
 
-  const repasRange = useLiveQuery(
-    () => {
-      if (!userId) return Promise.resolve([] as Repas[]);
-      const q = db.repas.where('userId').equals(userId);
-      return plageCalories === 'tout'
-        ? q.toArray()
-        : q.and((r) => r.date >= debutCal).toArray();
-    },
+  const repasRange = useDbQuery(
+    () => userId
+      ? plageCalories === 'tout'
+        ? getTousRepas(userId)
+        : getRepasDepuis(userId, debutCal)
+      : Promise.resolve([] as Repas[]),
+    [] as Repas[],
     [userId, plageCalories, debutCal],
-  ) ?? [];
+  );
 
   const [modalPesee, setModalPesee] = useState(false);
   const [nouveauPoids, setNouveauPoids] = useState('');
   const [noteP, setNoteP] = useState('');
-  const [modalSuppression, setModalSuppression] = useState<number | null>(null);
+  const [modalSuppression, setModalSuppression] = useState<string | null>(null);
 
   const [modalMesure, setModalMesure] = useState(false);
   const [tourDeTaille, setTourDeTaille] = useState('');
@@ -162,7 +163,8 @@ export function Progress() {
   const ajouterPesee = async () => {
     const poids = parseFloat(nouveauPoids);
     if (isNaN(poids) || !userId) return;
-    await db.pesees.add({ userId, date: format(new Date(), 'yyyy-MM-dd'), poids, note: noteP || undefined });
+    await addPesee({ userId, date: format(new Date(), 'yyyy-MM-dd'), poids, note: noteP || undefined });
+    refreshDb();
     setNouveauPoids(''); setNoteP(''); setModalPesee(false);
   };
 
@@ -177,7 +179,8 @@ export function Progress() {
       note: noteM || undefined,
     };
     if (!m.tourDeTaille && !m.hanches && !m.poitrine) return;
-    await db.mesures.add(m);
+    await addMesure(m as Omit<Mesure, 'id'>);
+    refreshDb();
     setTourDeTaille(''); setHanches(''); setPoitrine(''); setNoteM(''); setModalMesure(false);
   };
 
@@ -610,7 +613,7 @@ export function Progress() {
       <Modal ouvert={modalSuppression !== null} onFermer={() => setModalSuppression(null)} titre="Supprimer cette pesée ?">
         <div className="flex gap-2">
           <Button variante="secondary" pleine onClick={() => setModalSuppression(null)}>Annuler</Button>
-          <Button variante="danger" pleine onClick={async () => { if (modalSuppression) { await db.pesees.delete(modalSuppression); setModalSuppression(null); } }}>
+          <Button variante="danger" pleine onClick={async () => { if (modalSuppression) { await supprimerPesee(modalSuppression); refreshDb(); setModalSuppression(null); } }}>
             Supprimer
           </Button>
         </div>

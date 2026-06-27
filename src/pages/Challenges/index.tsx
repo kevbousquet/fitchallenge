@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useDbQuery } from '../../hooks/useDbQuery';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   Flame, Check, BarChart2, Dumbbell, Star, Camera, Target,
   TrendingDown, Trophy, Gem, Sparkles, Zap,
 } from 'lucide-react';
-import { db } from '../../db/database';
+import { getToutesJournees, getPesees, getBadges, ajouterBadge, getNbRepasAvecPhoto, getRepasRange } from '../../lib/db';
 import { useStore } from '../../store/useStore';
 import { Layout } from '../../components/layout/Layout';
 import { Card } from '../../components/ui/Card';
@@ -32,13 +32,13 @@ const BADGE_ICONS: Record<BadgeCle, { Icon: IconComp; color: string; bg: string 
 };
 
 export function Challenges() {
-  const { user } = useStore();
-  const userId = user?.id ?? 0;
+  const { user, refreshDb } = useStore();
+  const userId = user?.id ?? '';
 
-  const journees    = useLiveQuery(() => userId ? db.journees.where('userId').equals(userId).toArray() : Promise.resolve([] as Journee[]), [userId]) ?? [];
-  const pesees      = useLiveQuery(() => userId ? db.pesees.where('userId').equals(userId).sortBy('date') : Promise.resolve([] as Pesee[]), [userId]) ?? [];
-  const badgesDB    = useLiveQuery(() => userId ? db.badges.where('userId').equals(userId).toArray() : Promise.resolve([] as BadgeDebloque[]), [userId]) ?? [];
-  const repasPhotos = useLiveQuery(() => userId ? db.repas.where('userId').equals(userId).filter((r) => !!r.photoBase64).count() : Promise.resolve(0), [userId]) ?? 0;
+  const journees    = useDbQuery(() => userId ? getToutesJournees(userId) : Promise.resolve([] as Journee[]), [] as Journee[], [userId]);
+  const pesees      = useDbQuery(() => userId ? getPesees(userId) : Promise.resolve([] as Pesee[]), [] as Pesee[], [userId]);
+  const badgesDB    = useDbQuery(() => userId ? getBadges(userId) : Promise.resolve([] as BadgeDebloque[]), [] as BadgeDebloque[], [userId]);
+  const repasPhotos = useDbQuery(() => userId ? getNbRepasAvecPhoto(userId) : Promise.resolve(0), 0, [userId]);
 
   const today = new Date();
   const debutSemaine = startOfWeek(today, { weekStartsOn: 1 });
@@ -46,10 +46,11 @@ export function Challenges() {
   const debutSemaineStr = format(debutSemaine, 'yyyy-MM-dd');
   const finSemaineStr = format(finSemaine, 'yyyy-MM-dd');
 
-  const repasSemaine = useLiveQuery(
-    () => userId ? db.repas.where('userId').equals(userId).and((r) => r.date >= debutSemaineStr && r.date <= finSemaineStr).toArray() : Promise.resolve([] as Repas[]),
-    [debutSemaineStr, userId],
-  ) ?? [];
+  const repasSemaine = useDbQuery(
+    () => userId ? getRepasRange(userId, debutSemaineStr, finSemaineStr) : Promise.resolve([] as Repas[]),
+    [] as Repas[],
+    [userId, debutSemaineStr, finSemaineStr],
+  );
 
   const streak = calculerStreak(journees);
   const parfaitesSemaine = journeesPalfaitesDesSemaine(journees);
@@ -64,9 +65,9 @@ export function Challenges() {
     const nouveauxBadges = evaluerBadges(journees, pesees, poidsInitial, poidsObjectif, badgesDB, repasPhotos);
     if (nouveauxBadges.length === 0) return;
     const todayStr = format(today, 'yyyy-MM-dd');
-    nouveauxBadges.forEach((cle) => {
-      db.badges.add({ userId, cle, debloqueLeDate: todayStr }).catch(() => {});
-    });
+    Promise.all(nouveauxBadges.map((cle) =>
+      ajouterBadge({ userId, cle, debloqueLeDate: todayStr })
+    )).then(() => refreshDb()).catch(() => {});
   }, [journees, pesees, badgesDB, repasPhotos, poidsInitial, poidsObjectif]);
 
   const joursSemaine = eachDayOfInterval({ start: debutSemaine, end: finSemaine });
