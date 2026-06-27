@@ -28,7 +28,17 @@ export default defineConfig({
       },
     }),
   ],
+  worker: {
+    format: 'es',
+  },
+  optimizeDeps: {
+    exclude: ['@huggingface/transformers'],
+  },
   server: {
-    host: true, // expose sur le réseau local pour tests mobile
+    host: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
 });
