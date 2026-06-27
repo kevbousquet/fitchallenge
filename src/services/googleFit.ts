@@ -70,6 +70,43 @@ export async function connecter(clientId: string): Promise<boolean> {
   });
 }
 
+export async function recupererCaloriesAujourdhui(): Promise<number | null> {
+  const token = getToken();
+  if (!token) return null;
+
+  try {
+    const debutJour = new Date();
+    debutJour.setHours(0, 0, 0, 0);
+
+    const res = await fetch(
+      'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate',
+      {
+        method: 'POST',
+        headers: {
+          Authorization:  `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
+          bucketByTime:    { durationMillis: 86_400_000 },
+          startTimeMillis: debutJour.getTime(),
+          endTimeMillis:   Date.now(),
+        }),
+      },
+    );
+
+    if (res.status === 401) { deconnecter(); return null; }
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const points = data.bucket?.[0]?.dataset?.[0]?.point ?? [];
+    const total = points.reduce((s: number, p: any) => s + (p.value?.[0]?.fpVal ?? 0), 0);
+    return total > 0 ? Math.round(total) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function recupererPasAujourdhui(): Promise<number | null> {
   const token = getToken();
   if (!token) return null;

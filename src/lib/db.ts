@@ -53,6 +53,7 @@ function mapJournee(r: any): Journee {
     sportFait: r.sport_fait,
     typeSport: r.type_sport ?? undefined,
     dureeSport: r.duree_sport ?? undefined,
+    caloriesMontre: r.calories_montre ?? undefined,
     sommeilOk: r.sommeil_ok,
     pasDeGrignotage: r.pas_de_grignotage,
     pasDAlcool: r.pas_d_alcool,
@@ -270,6 +271,7 @@ export async function creerJournee(journee: Omit<Journee, 'id'>): Promise<Journe
     sport_fait: journee.sportFait,
     type_sport: journee.typeSport ?? null,
     duree_sport: journee.dureeSport ?? null,
+    calories_montre: journee.caloriesMontre ?? null,
     sommeil_ok: journee.sommeilOk,
     pas_de_grignotage: journee.pasDeGrignotage,
     pas_d_alcool: journee.pasDAlcool,
@@ -288,6 +290,7 @@ export async function modifierJournee(id: string, journee: Partial<Journee>): Pr
   if (journee.sportFait !== undefined) update.sport_fait = journee.sportFait;
   if (journee.typeSport !== undefined) update.type_sport = journee.typeSport;
   if (journee.dureeSport !== undefined) update.duree_sport = journee.dureeSport;
+  if (journee.caloriesMontre !== undefined) update.calories_montre = journee.caloriesMontre;
   if (journee.sommeilOk !== undefined) update.sommeil_ok = journee.sommeilOk;
   if (journee.pasDeGrignotage !== undefined) update.pas_de_grignotage = journee.pasDeGrignotage;
   if (journee.pasDAlcool !== undefined) update.pas_d_alcool = journee.pasDAlcool;

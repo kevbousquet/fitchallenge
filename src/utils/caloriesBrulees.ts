@@ -10,6 +10,7 @@ const MET: Record<string, number> = {
 export interface DepenseCaloriques {
   depensePas: number;
   depenseSport: number;
+  depenseMontre: number;
   total: number;
 }
 
@@ -29,5 +30,10 @@ export function calculerCaloriesBrulees(
     ? Math.round(metSport * poids * 0.0175 * (journee.dureeSport ?? 0))
     : 0;
 
-  return { depensePas, depenseSport, total: depensePas + depenseSport };
+  const depenseMontre = journee?.caloriesMontre ?? 0;
+
+  // Si la montre est renseignée, elle prime sur les calculs internes
+  const total = depenseMontre > 0 ? depenseMontre : depensePas + depenseSport;
+
+  return { depensePas, depenseSport, depenseMontre, total };
 }

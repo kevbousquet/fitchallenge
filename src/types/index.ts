@@ -96,6 +96,7 @@ export interface Journee {
   sportFait: boolean;
   typeSport?: 'cardio' | 'musculation' | 'marche' | 'autre';
   dureeSport?: number;
+  caloriesMontre?: number;
   sommeilOk: boolean;
   pasDeGrignotage: boolean;
   pasDAlcool: boolean;

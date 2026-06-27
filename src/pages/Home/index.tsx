@@ -26,7 +26,7 @@ import type { ProduitOFF } from '../../services/openFoodFacts';
 import { INGREDIENTS, CATEGORIE_LABELS, CATEGORIE_COLORS } from '../../data/ingredients';
 import type { Ingredient } from '../../data/ingredients';
 import { calculerCaloriesBrulees } from '../../utils/caloriesBrulees';
-import { isConnecte, recupererPasAujourdhui } from '../../services/googleFit';
+import { isConnecte, recupererPasAujourdhui, recupererCaloriesAujourdhui } from '../../services/googleFit';
 import type { Repas, AnalyseRepas, ChallengeId, CategoriRepas, FavoriRepas } from '../../types';
 
 const TODAY = format(new Date(), 'yyyy-MM-dd');
@@ -171,7 +171,7 @@ export function Home() {
     setNouveauPas(0);
   };
 
-  // Google Fit sync
+  // Google Fit sync — pas
   const [gfitSync, setGfitSync] = useState(false);
   const syncDepuisGoogleFit = async () => {
     setGfitSync(true);
@@ -181,6 +181,25 @@ export function Home() {
       await mettreAJourJournee({ pas });
       if (pas >= (user?.objectifPas ?? 8000)) lancerConfettis();
     }
+  };
+
+  // Calories montre
+  const [montreInput, setMontreInput] = useState('');
+  const [gfitCalSync, setGfitCalSync] = useState(false);
+
+  const saisirCaloriesMontre = async () => {
+    const n = parseInt(montreInput);
+    if (!isNaN(n) && n > 0) {
+      await mettreAJourJournee({ caloriesMontre: n });
+      setMontreInput('');
+    }
+  };
+
+  const syncCaloriesGoogleFit = async () => {
+    setGfitCalSync(true);
+    const cal = await recupererCaloriesAujourdhui();
+    setGfitCalSync(false);
+    if (cal !== null) await mettreAJourJournee({ caloriesMontre: cal });
   };
 
   const renderChallenge = (id: ChallengeId) => {
@@ -354,24 +373,84 @@ export function Home() {
         {format(new Date(), 'EEEE d MMMM', { locale: fr })}
       </p>
 
-      {/* Jauge + calories brûlées */}
+      {/* Jauge + calories */}
       <Card className="flex flex-col items-center py-6 gap-4">
         <CircularGauge valeur={caloriesConsommees} objectif={objectifCal} />
-        {depenseCaloriques.total > 0 && (
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1.5 text-slate-400">
-              <Flame size={12} className="text-orange-400" />
-              <span className="font-semibold text-orange-500">{depenseCaloriques.total} kcal brûlées</span>
-            </span>
-            <span className="text-slate-200 dark:text-gray-700">·</span>
-            <span className="text-slate-400">
-              Bilan :
-              <span className={`font-semibold ml-1 ${(caloriesConsommees - depenseCaloriques.total) <= 0 ? 'text-green-600 dark:text-green-400' : 'text-amber-500'}`}>
-                {caloriesConsommees - depenseCaloriques.total >= 0 ? '+' : ''}{caloriesConsommees - depenseCaloriques.total} kcal
-              </span>
-            </span>
+
+        {/* Bilan énergétique */}
+        <div className="w-full space-y-2 px-1">
+          {/* Ligne dépenses */}
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-slate-400 font-medium">Ingéré</span>
+            <span className="font-bold text-slate-700 dark:text-gray-200 tabular-nums">{caloriesConsommees} kcal</span>
           </div>
-        )}
+
+          {/* Dépense montre ou calcul interne */}
+          {depenseCaloriques.depenseMontre > 0 ? (
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <Flame size={11} className="text-orange-400" />
+                Brûlé (montre)
+              </span>
+              <span className="font-bold text-orange-500 tabular-nums">−{depenseCaloriques.depenseMontre} kcal</span>
+            </div>
+          ) : depenseCaloriques.total > 0 ? (
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="flex items-center gap-1.5 text-slate-400">
+                <Flame size={11} className="text-orange-400" />
+                Brûlé (estimé)
+                {depenseCaloriques.depensePas > 0 && (
+                  <span className="text-slate-300 dark:text-gray-600">
+                    · {journeeAujourdhui?.pas?.toLocaleString('fr')} pas
+                  </span>
+                )}
+              </span>
+              <span className="font-bold text-orange-500 tabular-nums">−{depenseCaloriques.total} kcal</span>
+            </div>
+          ) : null}
+
+          {/* Saisie calories montre */}
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              className="flex-1 text-xs border border-slate-200 dark:border-gray-700 rounded-lg px-2 py-1 dark:bg-gray-800 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              type="number"
+              placeholder={depenseCaloriques.depenseMontre > 0 ? `Montre : ${depenseCaloriques.depenseMontre} kcal` : "Calories brûlées (montre)"}
+              value={montreInput}
+              onChange={(e) => setMontreInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saisirCaloriesMontre()}
+            />
+            {montreInput && (
+              <button onClick={saisirCaloriesMontre} className="text-xs text-orange-600 dark:text-orange-400 font-bold px-1">OK</button>
+            )}
+            {isConnecte() && (
+              <button
+                onClick={syncCaloriesGoogleFit}
+                disabled={gfitCalSync}
+                className="text-xs bg-slate-50 dark:bg-gray-800 text-slate-500 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 border border-slate-200 dark:border-gray-700 disabled:opacity-50 flex-shrink-0"
+              >
+                {gfitCalSync
+                  ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin inline-block" />
+                  : <RefreshCw size={11} />
+                }
+                Google Fit
+              </button>
+            )}
+          </div>
+
+          {/* Bilan net */}
+          {(() => {
+            const net = caloriesConsommees - depenseCaloriques.total;
+            if (depenseCaloriques.total === 0 && caloriesConsommees === 0) return null;
+            const excedent = net > 0;
+            return (
+              <div className={`flex items-center justify-between gap-2 text-sm font-black pt-1 border-t border-slate-100 dark:border-gray-700 ${excedent ? 'text-amber-500' : 'text-green-600 dark:text-green-400'}`}>
+                <span>Bilan net</span>
+                <span className="tabular-nums">{excedent ? '+' : ''}{net} kcal</span>
+              </div>
+            );
+          })()}
+        </div>
+
         <Button taille="md" onClick={() => setModalRepas(true)} className="gap-2">
           <Plus size={16} strokeWidth={2.5} />
           Ajouter un repas
