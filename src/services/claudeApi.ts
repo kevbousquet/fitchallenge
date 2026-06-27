@@ -1,6 +1,6 @@
 import type { AnalyseRepas } from '../types';
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-1.5-flash-latest';
 
 const PROMPT_ANALYSE = `Analyse cette photo de repas et retourne UNIQUEMENT un objet JSON valide (sans markdown ni texte autour) avec la structure suivante :
 
@@ -35,7 +35,7 @@ export async function analyserRepasParPhoto(
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
