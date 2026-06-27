@@ -40,7 +40,7 @@ export async function analyserRepasParPhoto(
       'HTTP-Referer': 'https://fitchallenge.vercel.app',
     },
     body: JSON.stringify({
-      model: 'qwen/qwen2.5-vl-7b-instruct:free',
+      model: 'google/gemini-2.0-flash-exp:free',
       max_tokens: 1024,
       messages: [
         {
