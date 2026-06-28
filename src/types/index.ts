@@ -94,7 +94,7 @@ export interface Journee {
   pas: number;
   verresBus: number;
   sportFait: boolean;
-  typeSport?: 'cardio' | 'musculation' | 'marche' | 'autre';
+  typeSport?: 'cardio' | 'musculation' | 'marche' | 'tennis' | 'course' | 'velo' | 'natation' | 'yoga' | 'football' | 'autre';
   dureeSport?: number;
   caloriesMontre?: number;
   sommeilOk: boolean;

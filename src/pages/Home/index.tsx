@@ -80,7 +80,7 @@ export function Home() {
 
   const [modalRepas, setModalRepas] = useState(false);
   const [modalSport, setModalSport] = useState(false);
-  const [typeSport, setTypeSport] = useState<'cardio' | 'musculation' | 'marche' | 'autre'>('cardio');
+  const [typeSport, setTypeSport] = useState<'cardio' | 'musculation' | 'marche' | 'tennis' | 'course' | 'velo' | 'natation' | 'yoga' | 'football' | 'autre'>('cardio');
   const [dureeSport, setDureeSport] = useState('30');
 
   const lancerConfettis = () =>
@@ -537,12 +537,18 @@ export function Home() {
         <div className="space-y-4">
           <div>
             <label className="label">Type de séance</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {([
-                { id: 'cardio',      label: 'Cardio' },
-                { id: 'musculation', label: 'Muscu' },
-                { id: 'marche',      label: 'Marche' },
-                { id: 'autre',       label: 'Autre' },
+                { id: 'tennis',      label: '🎾 Tennis' },
+                { id: 'course',      label: '🏃 Course' },
+                { id: 'velo',        label: '🚴 Vélo' },
+                { id: 'natation',    label: '🏊 Natation' },
+                { id: 'football',    label: '⚽ Football' },
+                { id: 'musculation', label: '🏋️ Muscu' },
+                { id: 'cardio',      label: '💪 Cardio' },
+                { id: 'yoga',        label: '🧘 Yoga' },
+                { id: 'marche',      label: '🚶 Marche' },
+                { id: 'autre',       label: '🏅 Autre' },
               ] as const).map((t) => (
                 <button
                   key={t.id}

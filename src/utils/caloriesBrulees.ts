@@ -4,6 +4,12 @@ const MET: Record<string, number> = {
   cardio:      7.0,
   musculation: 4.0,
   marche:      3.5,
+  tennis:      7.3,
+  course:      9.8,
+  velo:        7.5,
+  natation:    8.0,
+  yoga:        2.5,
+  football:    7.0,
   autre:       5.0,
 };
 

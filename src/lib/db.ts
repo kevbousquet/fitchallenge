@@ -271,7 +271,6 @@ export async function creerJournee(journee: Omit<Journee, 'id'>): Promise<Journe
     sport_fait: journee.sportFait,
     type_sport: journee.typeSport ?? null,
     duree_sport: journee.dureeSport ?? null,
-    calories_montre: journee.caloriesMontre ?? null,
     sommeil_ok: journee.sommeilOk,
     pas_de_grignotage: journee.pasDeGrignotage,
     pas_d_alcool: journee.pasDAlcool,
